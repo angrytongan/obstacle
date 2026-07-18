@@ -97,7 +97,38 @@ const viewport = document.getElementById("viewport")!;
 const typeSelect = document.getElementById("type-select") as HTMLSelectElement;
 const methodSelect = document.getElementById("method-select") as HTMLSelectElement;
 const slidersEl = document.getElementById("sliders")!;
+const resetBtn = document.getElementById("reset-btn")!;
 const bomEl = document.getElementById("bom")!;
+const tooltipEl = document.getElementById("tooltip")!;
+
+// A single shared tooltip, positioned from the hovered/focused icon's actual screen
+// rect and appended outside #panel (see index.html) so #panel's overflow-y:auto can't
+// clip it — delegated on document since .info-icon elements are recreated on every
+// renderBom() call.
+function showTooltip(icon: HTMLElement): void {
+  const text = icon.dataset.tooltip;
+  if (!text) return;
+  tooltipEl.textContent = text;
+  const rect = icon.getBoundingClientRect();
+  tooltipEl.style.left = `${rect.left + rect.width / 2}px`;
+  tooltipEl.style.top = `${rect.top}px`;
+  tooltipEl.classList.add("visible");
+}
+function hideTooltip(): void {
+  tooltipEl.classList.remove("visible");
+}
+for (const [showEvent, hideEvent] of [
+  ["mouseover", "mouseout"],
+  ["focusin", "focusout"],
+] as const) {
+  document.addEventListener(showEvent, (e) => {
+    const icon = (e.target as HTMLElement).closest<HTMLElement>(".info-icon");
+    if (icon) showTooltip(icon);
+  });
+  document.addEventListener(hideEvent, (e) => {
+    if ((e.target as HTMLElement).closest(".info-icon")) hideTooltip();
+  });
+}
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xdfe9f0);
@@ -238,8 +269,8 @@ function renderBom(type: ObstacleType, method: ConstructionMethod): void {
     <p class="bom-disclaimer">${BOM_DISCLAIMER}</p>
   `;
   for (const icon of bomEl.querySelectorAll<HTMLElement>(".info-icon")) {
-    // Safari doesn't focus a button on click by default, which the CSS tooltip relies
-    // on for "click to open" — force it so hover and click both work everywhere.
+    // Safari doesn't focus a button on click by default; force it so the delegated
+    // focusin listener (which shows the tooltip) fires on click too, not just hover.
     icon.addEventListener("click", () => icon.focus());
   }
 }
@@ -300,11 +331,21 @@ function selectType(type: ObstacleType): void {
   renderBom(type, currentMethod);
 }
 
+function resetParams(): void {
+  const type = typeSelect.value as ObstacleType;
+  currentParams = { ...OBSTACLES[type].defaults };
+  renderSliders(type);
+  rebuildObstacle(type);
+  rebuildDimensions(type);
+  renderBom(type, currentMethod);
+}
+
 typeSelect.addEventListener("change", () => selectType(typeSelect.value as ObstacleType));
 methodSelect.addEventListener("change", () => {
   currentMethod = methodSelect.value as ConstructionMethod;
   renderBom(typeSelect.value as ObstacleType, currentMethod);
 });
+resetBtn.addEventListener("click", resetParams);
 selectType("roller");
 
 function resize(): void {

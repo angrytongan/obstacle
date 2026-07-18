@@ -93,6 +93,12 @@
       .slider-row input[type="range"] {
         width: 100%;
       }
+      #reset-btn {
+        width: 100%;
+        padding: 0.4rem;
+        margin-bottom: 1rem;
+        cursor: pointer;
+      }
       #viewport {
         flex: 1;
         min-width: 0;
@@ -167,13 +173,15 @@
         margin-left: 0.15rem;
         cursor: help;
       }
-      .info-icon::after {
-        content: attr(data-tooltip);
-        position: absolute;
-        bottom: 130%;
-        left: 50%;
-        transform: translateX(-50%);
-        width: max-content;
+      /*
+        A shared tooltip element positioned in JS from the hovered/focused icon's
+        getBoundingClientRect(), appended directly to <body> rather than anchored inside
+        the icon — #panel needs overflow-y:auto to scroll, and any ancestor with
+        non-visible overflow clips an absolutely-positioned descendant that pops outside
+        its bounds, no matter its z-index. position:fixed here escapes that entirely.
+      */
+      #tooltip {
+        position: fixed;
         max-width: 200px;
         background: #1c1c1c;
         border: 1px solid #555;
@@ -181,16 +189,13 @@
         padding: 0.4rem 0.55rem;
         border-radius: 4px;
         font-size: 0.7rem;
-        font-weight: normal;
-        font-style: normal;
         text-align: left;
-        white-space: normal;
         visibility: hidden;
         pointer-events: none;
-        z-index: 10;
+        z-index: 1000;
+        transform: translate(-50%, calc(-100% - 8px));
       }
-      .info-icon:hover::after,
-      .info-icon:focus::after {
+      #tooltip.visible {
         visibility: visible;
       }
     </style>
@@ -226,10 +231,12 @@
         </select>
         <select id="method-select"></select>
         <div id="sliders"></div>
+        <button type="button" id="reset-btn">Reset to defaults</button>
         <div id="bom"></div>
       </div>
       <div id="viewport"></div>
     </div>
+    <div id="tooltip" role="tooltip"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
