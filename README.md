@@ -7,8 +7,9 @@ alongside the 3D shape.
 
 Standalone: no terrain, no trail, no persistence — just one obstacle at a
 time. Currently only the roller's earthen construction method is
-implemented — see [CLAUDE.md](CLAUDE.md) for status and the other
-type/method combinations still to come.
+implemented — see [docs/status.md](docs/status.md) for what's built and
+[docs/features.md](docs/features.md) for the other type/method
+combinations still to come.
 
 ## Running
 
