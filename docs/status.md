@@ -37,6 +37,15 @@ style, no textures).
 pill, GitHub link) matching maketrail's header, above an `.app` flex row
 holding the `#panel` (options) and `#viewport` (3D view) cards.
 
+## Deployment
+
+`.github/workflows/deploy.yml`: on push to `main` (or manual
+`workflow_dispatch`), runs lint/typecheck/test/build then publishes
+`dist/` to GitHub Pages via `actions/deploy-pages`. `vite.config.ts` sets
+`base: "/obstacle/"` to match the project-Pages subpath. Requires the
+repo's Settings → Pages → Source set to "GitHub Actions" (one-time, not
+done by the workflow itself).
+
 ## Construction / BOM
 
 `src/construction/`, all pure functions, tested. Only the roller's earthen

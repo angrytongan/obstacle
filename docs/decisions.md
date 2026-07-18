@@ -12,6 +12,10 @@ Scope/architecture decisions, so they don't need re-asking each session. Update 
 - **Params reset to type defaults on switching obstacle type** — no
   per-type state persisted while the page is open. A "Reset to defaults"
   button does the same for the current type without switching.
+- **Deployed to GitHub Pages**, not a custom host — a static Vite build
+  with no backend needs nothing more. Pushes to `main` build and deploy
+  automatically via `.github/workflows/deploy.yml`, gated on
+  lint/typecheck/test passing first.
 
 ## Obstacle geometry
 
