@@ -5,6 +5,7 @@ import { buildBermGeometry, BERM_DEFAULTS, type BermParams } from "./obstacles/b
 import { buildKickerGeometry, KICKER_DEFAULTS, type KickerParams } from "./obstacles/kicker";
 import { checkRollerSlope } from "./construction/slopeCheck";
 import { calculateRollerEarthenBom } from "./construction/earthenBom";
+import { buildRollerDimensions } from "./dimensions/rollerDimensions";
 
 type ObstacleType = "roller" | "berm" | "kicker";
 type ConstructionMethod = "earthen" | "timber" | "hybrid" | "metal";
@@ -27,6 +28,12 @@ const IMPLEMENTED_METHODS: Record<ObstacleType, ConstructionMethod[]> = {
 
 const BOM_DISCLAIMER =
   "Planning estimate only — not a substitute for a qualified builder's or engineer's assessment.";
+
+// Which obstacle types have dimension lines built — roller only for now (see docs).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const DIMENSION_BUILDERS: Partial<Record<ObstacleType, (params: any) => ReturnType<typeof buildRollerDimensions>>> = {
+  roller: buildRollerDimensions,
+};
 
 interface SliderSpec {
   key: string;
@@ -118,6 +125,10 @@ const obstacleMesh = new THREE.Mesh(new THREE.BufferGeometry(), material);
 obstacleMesh.castShadow = true;
 scene.add(obstacleMesh);
 
+const dimensionsGroup = new THREE.Group();
+dimensionsGroup.position.y = 0.01; // lifted off the ground plane to avoid z-fighting with it
+scene.add(dimensionsGroup);
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let currentParams: any = { ...OBSTACLES.roller.defaults };
 let currentMethod: ConstructionMethod = "earthen";
@@ -126,6 +137,71 @@ function rebuildObstacle(type: ObstacleType): void {
   const geometry = OBSTACLES[type].build(currentParams);
   obstacleMesh.geometry.dispose();
   obstacleMesh.geometry = geometry;
+}
+
+const LABEL_FONT_PX = 48;
+const LABEL_WORLD_HEIGHT = 0.25; // meters
+
+/** A camera-facing text billboard drawn on a canvas texture — always in-scene, redrawn every frame with the rest of the WebGL canvas, so there's no separate DOM overlay that can get out of sync. */
+function createLabelSprite(text: string): THREE.Sprite {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d")!;
+  ctx.font = `${LABEL_FONT_PX}px sans-serif`;
+  const paddingX = 16;
+  canvas.width = ctx.measureText(text).width + paddingX * 2;
+  canvas.height = LABEL_FONT_PX * 1.4;
+
+  ctx.font = `${LABEL_FONT_PX}px sans-serif`; // reset after resize, which clears context state
+  ctx.fillStyle = "#ffffffcc";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#222222";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, paddingX, canvas.height / 2);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false }));
+  sprite.scale.set((LABEL_WORLD_HEIGHT * canvas.width) / canvas.height, LABEL_WORLD_HEIGHT, 1);
+  return sprite;
+}
+
+// Explicit disposer over exactly what the last rebuild created.
+let disposeDimensions: (() => void) | null = null;
+
+function rebuildDimensions(type: ObstacleType): void {
+  disposeDimensions?.();
+  disposeDimensions = null;
+
+  const build = DIMENSION_BUILDERS[type];
+  if (!build) return;
+
+  const groups: THREE.Group[] = [];
+  const sprites: THREE.Sprite[] = [];
+  for (const dim of build(currentParams)) {
+    dimensionsGroup.add(dim.group);
+    groups.push(dim.group);
+
+    const sprite = createLabelSprite(dim.text);
+    sprite.position.copy(dim.labelPosition);
+    dimensionsGroup.add(sprite);
+    sprites.push(sprite);
+  }
+
+  disposeDimensions = () => {
+    for (const group of groups) {
+      // Only the plain Line geometries we build ourselves — not ArrowHelper's internal
+      // line/cone, which Three.js shares as static geometry across every ArrowHelper
+      // instance, so disposing it here would break arrows everywhere.
+      for (const child of group.children) {
+        if (child instanceof THREE.Line) child.geometry.dispose();
+      }
+      dimensionsGroup.remove(group);
+    }
+    for (const sprite of sprites) {
+      sprite.material.map?.dispose();
+      sprite.material.dispose();
+      dimensionsGroup.remove(sprite);
+    }
+  };
 }
 
 function renderBom(type: ObstacleType, method: ConstructionMethod): void {
@@ -190,6 +266,7 @@ function renderSliders(type: ObstacleType): void {
       currentParams[spec.key] = Number(input.value);
       valueSpan.textContent = input.value;
       rebuildObstacle(type);
+      rebuildDimensions(type);
       renderBom(type, currentMethod);
     });
 
@@ -202,6 +279,7 @@ function selectType(type: ObstacleType): void {
   currentParams = { ...OBSTACLES[type].defaults };
   renderSliders(type);
   rebuildObstacle(type);
+  rebuildDimensions(type);
   renderMethodOptions(type);
   renderBom(type, currentMethod);
 }
