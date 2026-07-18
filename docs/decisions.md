@@ -19,9 +19,15 @@ Scope/architecture decisions, so they don't need re-asking each session. Update 
 
 ## Obstacle geometry
 
-- Obstacle mesh material uses `THREE.DoubleSide` (see `src/main.ts`) so the
-  hand-built berm mesh renders regardless of triangle winding — a ponytail
-  simplification, not a bug fix if the berm ever looks inside-out.
+- Obstacle mesh material uses `THREE.DoubleSide` (see `src/main.ts`) so
+  hand-built meshes (berm, roller) render regardless of triangle winding —
+  a ponytail simplification, not a bug fix if one of them ever looks
+  inside-out.
+- **Roller width tapers along its length** (`widthStart`/`widthEnd`, not a
+  single `width`), so a real roller can be built narrower at one end than
+  the other. This is why `roller.ts` is hand-built `BufferGeometry` (four
+  ruled quad strips) rather than `THREE.Shape` + `ExtrudeGeometry` — extrude
+  can't vary its depth along the path.
 
 ## Construction method / BOM
 

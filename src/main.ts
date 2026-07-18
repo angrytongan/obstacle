@@ -67,7 +67,8 @@ const OBSTACLES: Record<ObstacleType, ObstacleSpec<any>> = {
     sliders: [
       { key: "length", label: "Length (m)", min: 1, max: 8, step: 0.1 },
       { key: "height", label: "Height (m)", min: 0.1, max: 1.5, step: 0.05 },
-      { key: "width", label: "Width (m)", min: 0.5, max: 3, step: 0.1 },
+      { key: "widthStart", label: "Width at start (m)", min: 0.5, max: 3, step: 0.1 },
+      { key: "widthEnd", label: "Width at end (m)", min: 0.5, max: 3, step: 0.1 },
       { key: "periods", label: "Periods", min: 1, max: 5, step: 1 },
     ],
     build: (p: RollerParams) => buildRollerGeometry(p),

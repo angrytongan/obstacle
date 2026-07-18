@@ -8,8 +8,13 @@ Three obstacle types built, each a pure geometry builder in
 `src/obstacles/` with its own defaults/param ranges wired into
 `src/main.ts`'s generic slider UI:
 
-- `roller.ts` — sine-wave hump profile (`length`/`height`/`width`/`periods`),
-  built via `THREE.Shape` + `ExtrudeGeometry`.
+- `roller.ts` — sine-wave hump profile (`length`/`height`/`widthStart`/
+  `widthEnd`/`periods`), width linearly tapered along the length. Hand-built
+  `BufferGeometry` (four ruled quad strips: top, bottom, left wall, right
+  wall — `ExtrudeGeometry` can't vary its extrusion depth, which a taper
+  needs), not `THREE.Shape`/`ExtrudeGeometry` as before. `rollerWidthAt(x,
+  params)` is the shared taper lerp, reused by the earthen BOM's fill-volume
+  integration and by the dimension-line builder.
 - `berm.ts` — banked turn: a flat tilted cross-section swept along a
   circular arc (`radius`/`sweepAngleDeg`/`bankAngleDeg`/`width`), hand-built
   `BufferGeometry` (no stdlib extrude-along-arc primitive exists). Only
@@ -57,12 +62,14 @@ method is implemented.
   steepest tangent angle (`height * pi * periods / length`, i.e. where the
   sine derivative peaks) compared against the soil profile's safe angle.
 - `earthenBom.ts` — `calculateRollerEarthenBom`: compacted fill volume via
-  the shoelace formula on the roller's own profile polygon (exported from
-  `roller.ts` as `rollerProfilePoints`, shared with the 3D geometry builder
-  so the two can't drift apart) × width; loose fill via the waste factor;
-  geotextile fabric area as the footprint rectangle. Returns both
-  `compactedFillVolumeM3` and `looseFillVolumeM3` — the BOM UI only shows
-  the latter as an orderable line (see decisions.md).
+  trapezoidal integration of cross-sectional area (`y(x) * rollerWidthAt(x,
+  params)`) along the roller's own profile samples (`rollerProfilePoints`,
+  shared with the 3D geometry builder so the two can't drift apart) —
+  needed once width tapers along the length, since volume is no longer a
+  constant cross-section × width; loose fill via the waste factor;
+  geotextile fabric area as the footprint trapezoid (`length * average
+  width`). Returns both `compactedFillVolumeM3` and `looseFillVolumeM3` —
+  the BOM UI only shows the latter as an orderable line (see decisions.md).
 - Wired into `src/main.ts`'s BOM panel, which keeps the current 3D shape
   unchanged for earthen construction (no framing members to expose — see
   decisions.md) and recalculates on every parameter/method change.
@@ -83,9 +90,10 @@ creation lives in `src/main.ts` only. Roller only.
   cone (`headLength` ≈ arrow `length`) pointing outward at each end.
   Returns `{ group, labelPosition }` — no text/DOM involved, so it's
   testable in Node like the obstacle/construction modules.
-- `rollerDimensions.ts` — `buildRollerDimensions`: composes three linear
-  dimensions (length/width/height), one per side of the footprint so none
-  overlap. Height is anchored at the roller's first crest
+- `rollerDimensions.ts` — `buildRollerDimensions`: composes four linear
+  dimensions (length/width-start/width-end/height), one per side of the
+  footprint so none overlap — width gets two dimensions, one per end,
+  since it tapers. Height is anchored at the roller's first crest
   (`x = length/(2*periods)`) rather than an edge, since the roller's
   edges are always at `y=0` — the `height` param is only actually reached
   there.
