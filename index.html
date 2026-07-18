@@ -26,7 +26,8 @@
         font-size: 1.1rem;
         margin: 0 0 1rem;
       }
-      #type-select {
+      #type-select,
+      #method-select {
         width: 100%;
         padding: 0.4rem;
         margin-bottom: 1rem;
@@ -50,6 +51,54 @@
       #viewport canvas {
         display: block;
       }
+      #bom {
+        margin-top: 1.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid #8884;
+        font-size: 0.85rem;
+      }
+      #bom h2 {
+        font-size: 0.95rem;
+        margin: 0 0 0.6rem;
+      }
+      #bom dl {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 0.25rem 0.5rem;
+        margin: 0 0 0.75rem;
+      }
+      #bom dt {
+        opacity: 0.75;
+      }
+      #bom dd {
+        margin: 0;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .bom-status {
+        display: inline-block;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        margin-bottom: 0.75rem;
+      }
+      .bom-status.safe {
+        background: #1a7f371a;
+        color: #1a7f37;
+      }
+      .bom-status.unsafe {
+        background: #cf222e1a;
+        color: #cf222e;
+      }
+      .bom-disclaimer {
+        font-size: 0.75rem;
+        opacity: 0.7;
+        font-style: italic;
+      }
+      .bom-unavailable {
+        opacity: 0.7;
+        font-style: italic;
+      }
     </style>
   </head>
   <body>
@@ -60,7 +109,9 @@
         <option value="berm">Berm</option>
         <option value="kicker">Kicker</option>
       </select>
+      <select id="method-select"></select>
       <div id="sliders"></div>
+      <div id="bom"></div>
     </div>
     <div id="viewport"></div>
     <script type="module" src="/src/main.ts"></script>

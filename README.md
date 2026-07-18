@@ -1,10 +1,13 @@
 # obstacle
 
-Browser gallery for visualising mountain bike obstacles — pick a type (roller,
-berm, kicker), tweak its parameters, and see it rendered live in 3D.
+Browser app for planning real-world mountain bike obstacle builds: pick a
+type (roller, berm, kicker), tweak its parameters, choose a construction
+method, and see a live bill of materials alongside the 3D shape.
 
 Standalone: no terrain, no trail, no persistence — just one obstacle at a
-time.
+time. Currently only the roller's earthen construction method is
+implemented — see [CLAUDE.md](CLAUDE.md) for status and the other
+type/method combinations still to come.
 
 ## Running
 
@@ -20,5 +23,9 @@ npm run typecheck   # type-check
 
 Vite + TypeScript + Three.js, no framework, no backend. `src/obstacles/`
 holds pure geometry builders (one file per obstacle type, each a parametric
-`THREE.BufferGeometry` centered on its own footprint); `src/main.ts` wires up
-the scene, camera, lighting, and the type/parameter UI.
+`THREE.BufferGeometry` centered on its own footprint); `src/construction/`
+holds construction-method reference data and per-method bill-of-materials /
+soundness-check calculations; `src/main.ts` wires up the scene, camera,
+lighting, and the type/method/parameter UI. `research/` holds source notes
+for the real-world dimensions/ratios/standards the calculations are based
+on.

@@ -3,8 +3,30 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { buildRollerGeometry, ROLLER_DEFAULTS, type RollerParams } from "./obstacles/roller";
 import { buildBermGeometry, BERM_DEFAULTS, type BermParams } from "./obstacles/berm";
 import { buildKickerGeometry, KICKER_DEFAULTS, type KickerParams } from "./obstacles/kicker";
+import { checkRollerSlope } from "./construction/slopeCheck";
+import { calculateRollerEarthenBom } from "./construction/earthenBom";
 
 type ObstacleType = "roller" | "berm" | "kicker";
+type ConstructionMethod = "earthen" | "timber" | "hybrid" | "metal";
+
+const CONSTRUCTION_METHOD_LABELS: Record<ConstructionMethod, string> = {
+  earthen: "Earthen",
+  timber: "Timber-framed",
+  hybrid: "Hybrid (timber core, dirt cap)",
+  metal: "Metal-framed",
+};
+const ALL_CONSTRUCTION_METHODS = Object.keys(CONSTRUCTION_METHOD_LABELS) as ConstructionMethod[];
+
+// Which construction methods are actually implemented per obstacle type — everything else
+// still shows in the dropdown, just disabled, so the eventual shape of the feature is visible.
+const IMPLEMENTED_METHODS: Record<ObstacleType, ConstructionMethod[]> = {
+  roller: ["earthen"],
+  berm: [],
+  kicker: [],
+};
+
+const BOM_DISCLAIMER =
+  "Planning estimate only — not a substitute for a qualified builder's or engineer's assessment.";
 
 interface SliderSpec {
   key: string;
@@ -55,7 +77,9 @@ const OBSTACLES: Record<ObstacleType, ObstacleSpec<any>> = {
 
 const viewport = document.getElementById("viewport")!;
 const typeSelect = document.getElementById("type-select") as HTMLSelectElement;
+const methodSelect = document.getElementById("method-select") as HTMLSelectElement;
 const slidersEl = document.getElementById("sliders")!;
+const bomEl = document.getElementById("bom")!;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xdfe9f0);
@@ -96,11 +120,53 @@ scene.add(obstacleMesh);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let currentParams: any = { ...OBSTACLES.roller.defaults };
+let currentMethod: ConstructionMethod = "earthen";
 
 function rebuildObstacle(type: ObstacleType): void {
   const geometry = OBSTACLES[type].build(currentParams);
   obstacleMesh.geometry.dispose();
   obstacleMesh.geometry = geometry;
+}
+
+function renderBom(type: ObstacleType, method: ConstructionMethod): void {
+  if (type !== "roller" || method !== "earthen") {
+    bomEl.innerHTML = `<p class="bom-unavailable">No bill of materials yet for ${CONSTRUCTION_METHOD_LABELS[method].toLowerCase()} ${type}s.</p>`;
+    return;
+  }
+
+  const params = currentParams as RollerParams;
+  const slope = checkRollerSlope(params);
+  const bom = calculateRollerEarthenBom(params);
+
+  bomEl.innerHTML = `
+    <h2>Bill of materials</h2>
+    <span class="bom-status ${slope.safe ? "safe" : "unsafe"}">
+      ${slope.safe ? "Slope OK" : "Too steep"}: ${slope.maxAngleDeg.toFixed(1)}° (max safe ${slope.safeAngleDeg}°)
+    </span>
+    <dl>
+      <dt>Compacted fill</dt><dd>${bom.compactedFillVolumeM3.toFixed(2)} m³</dd>
+      <dt>Loose fill to source</dt><dd>${bom.looseFillVolumeM3.toFixed(2)} m³</dd>
+      <dt>Geotextile fabric</dt><dd>${bom.geotextileFabricAreaM2.toFixed(2)} m²</dd>
+    </dl>
+    <p class="bom-disclaimer">${BOM_DISCLAIMER}</p>
+  `;
+}
+
+function renderMethodOptions(type: ObstacleType): void {
+  const implemented = IMPLEMENTED_METHODS[type];
+  methodSelect.innerHTML = "";
+  for (const method of ALL_CONSTRUCTION_METHODS) {
+    const option = document.createElement("option");
+    option.value = method;
+    const isImplemented = implemented.includes(method);
+    option.disabled = !isImplemented;
+    option.textContent = isImplemented
+      ? CONSTRUCTION_METHOD_LABELS[method]
+      : `${CONSTRUCTION_METHOD_LABELS[method]} — not yet implemented`;
+    methodSelect.append(option);
+  }
+  currentMethod = implemented[0] ?? ALL_CONSTRUCTION_METHODS[0];
+  methodSelect.value = currentMethod;
 }
 
 function renderSliders(type: ObstacleType): void {
@@ -124,6 +190,7 @@ function renderSliders(type: ObstacleType): void {
       currentParams[spec.key] = Number(input.value);
       valueSpan.textContent = input.value;
       rebuildObstacle(type);
+      renderBom(type, currentMethod);
     });
 
     row.append(label, input);
@@ -135,9 +202,15 @@ function selectType(type: ObstacleType): void {
   currentParams = { ...OBSTACLES[type].defaults };
   renderSliders(type);
   rebuildObstacle(type);
+  renderMethodOptions(type);
+  renderBom(type, currentMethod);
 }
 
 typeSelect.addEventListener("change", () => selectType(typeSelect.value as ObstacleType));
+methodSelect.addEventListener("change", () => {
+  currentMethod = methodSelect.value as ConstructionMethod;
+  renderBom(typeSelect.value as ObstacleType, currentMethod);
+});
 selectType("roller");
 
 function resize(): void {
