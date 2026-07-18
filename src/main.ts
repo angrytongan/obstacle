@@ -29,6 +29,17 @@ const IMPLEMENTED_METHODS: Record<ObstacleType, ConstructionMethod[]> = {
 const BOM_DISCLAIMER =
   "Planning estimate only — not a substitute for a qualified builder's or engineer's assessment.";
 
+const BOM_INFO = {
+  geotextile:
+    "Permeable fabric laid under the fill to stop it mixing into the subgrade and to aid drainage.",
+  slopeConstraint:
+    "Max safe unretained slope is OSHA's Type C soil limit (34°, i.e. 1.5:1) — 29 CFR 1926 Subpart P, Appendix B. A conservative stand-in for soil angle of repose, not a site-specific geotechnical assessment.",
+};
+
+function infoIcon(tooltip: string): string {
+  return `<button type="button" class="info-icon" data-tooltip="${tooltip}" aria-label="More info">i</button>`;
+}
+
 // Which obstacle types have dimension lines built — roller only for now (see docs).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const DIMENSION_BUILDERS: Partial<Record<ObstacleType, (params: any) => ReturnType<typeof buildRollerDimensions>>> = {
@@ -100,7 +111,6 @@ viewport.appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 0.3, 0);
-controls.enableDamping = true;
 
 const ambient = new THREE.AmbientLight(0xffffff, 0.6);
 const sun = new THREE.DirectionalLight(0xffffff, 1.4);
@@ -213,19 +223,25 @@ function renderBom(type: ObstacleType, method: ConstructionMethod): void {
   const params = currentParams as RollerParams;
   const slope = checkRollerSlope(params);
   const bom = calculateRollerEarthenBom(params);
+  const fillTooltip = `Order this much loose fill — it settles to ${bom.compactedFillVolumeM3.toFixed(2)} m³ once compacted in place (includes a 20% waste factor).`;
 
   bomEl.innerHTML = `
     <h2>Bill of materials</h2>
     <span class="bom-status ${slope.safe ? "safe" : "unsafe"}">
       ${slope.safe ? "Slope OK" : "Too steep"}: ${slope.maxAngleDeg.toFixed(1)}° (max safe ${slope.safeAngleDeg}°)
+      ${infoIcon(BOM_INFO.slopeConstraint)}
     </span>
     <dl>
-      <dt>Compacted fill</dt><dd>${bom.compactedFillVolumeM3.toFixed(2)} m³</dd>
-      <dt>Loose fill to source</dt><dd>${bom.looseFillVolumeM3.toFixed(2)} m³</dd>
-      <dt>Geotextile fabric</dt><dd>${bom.geotextileFabricAreaM2.toFixed(2)} m²</dd>
+      <dt><span class="bom-label">Fill material</span> ${infoIcon(fillTooltip)}</dt><dd>${bom.looseFillVolumeM3.toFixed(2)} m³</dd>
+      <dt><span class="bom-label">Geotextile fabric</span> ${infoIcon(BOM_INFO.geotextile)}</dt><dd>${bom.geotextileFabricAreaM2.toFixed(2)} m²</dd>
     </dl>
     <p class="bom-disclaimer">${BOM_DISCLAIMER}</p>
   `;
+  for (const icon of bomEl.querySelectorAll<HTMLElement>(".info-icon")) {
+    // Safari doesn't focus a button on click by default, which the CSS tooltip relies
+    // on for "click to open" — force it so hover and click both work everywhere.
+    icon.addEventListener("click", () => icon.focus());
+  }
 }
 
 function renderMethodOptions(type: ObstacleType): void {

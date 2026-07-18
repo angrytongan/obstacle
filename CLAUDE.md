@@ -99,10 +99,31 @@ only the roller's earthen method is implemented.
   the shoelace formula on the roller's own profile polygon (exported from
   `roller.ts` as `rollerProfilePoints`, shared with the 3D geometry builder
   so the two can't drift apart) × width; loose fill via the waste factor;
-  geotextile fabric area as the footprint rectangle.
+  geotextile fabric area as the footprint rectangle. Still returns both
+  `compactedFillVolumeM3` and `looseFillVolumeM3` — only the UI
+  presentation changed (see next point).
 - Wired into `src/main.ts`'s BOM panel, which keeps the current 3D shape
   unchanged for earthen construction (no framing members to expose — see
-  decisions above) and recalculates on every parameter/method change.
+  decisions above) and recalculates on every parameter/method change. The
+  BOM shows one orderable "Fill material" line (`looseFillVolumeM3` — what
+  you actually order) rather than two parallel lines for compacted and
+  loose volume, which read as two separate materials and left it unclear
+  which one to order; the compacted design volume is folded into that
+  line's tooltip as context instead.
+- Every BOM line item and the slope constraint badge has an info icon
+  (`infoIcon()`/`BOM_INFO` in `src/main.ts`) — hover or click opens a
+  tooltip explaining what the item is or, for the slope constraint,
+  citing its source. Pure CSS (`::after` + `:hover`/`:focus` in
+  `index.html`), plus one line of JS forcing focus on click since Safari
+  doesn't focus a clicked `<button>` by default. Tooltip visibility is a
+  `visibility` toggle only, no `opacity`/fade — `opacity` on an element
+  forces its whole subtree to composite at that alpha, so a fade would
+  make the tooltip itself look translucent while animating. For the same
+  reason, muted/dim label text (`.bom-label`) must never be an *ancestor*
+  of an info icon — wrap only the label text in the dim styling, not the
+  `<dt>` that also contains the icon, or the tooltip inherits the dim
+  ancestor's opacity as its own compositing alpha regardless of its own
+  background color (this bit twice before being tracked down).
 
 **Dimension lines** (`src/dimensions/`, pure geometry functions, tested;
 DOM-touching label creation lives in `src/main.ts` only, per the pattern
