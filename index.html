@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>obstacle</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        display: flex;
+        height: 100vh;
+      }
+      #panel {
+        width: 260px;
+        flex-shrink: 0;
+        padding: 1rem;
+        box-sizing: border-box;
+        overflow-y: auto;
+        border-right: 1px solid #8884;
+      }
+      #panel h1 {
+        font-size: 1.1rem;
+        margin: 0 0 1rem;
+      }
+      #type-select {
+        width: 100%;
+        padding: 0.4rem;
+        margin-bottom: 1rem;
+      }
+      .slider-row {
+        margin-bottom: 0.9rem;
+      }
+      .slider-row label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.85rem;
+        margin-bottom: 0.25rem;
+      }
+      .slider-row input[type="range"] {
+        width: 100%;
+      }
+      #viewport {
+        flex: 1;
+        min-width: 0;
+      }
+      #viewport canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="panel">
+      <h1>obstacle</h1>
+      <select id="type-select">
+        <option value="roller">Roller</option>
+        <option value="berm">Berm</option>
+        <option value="kicker">Kicker</option>
+      </select>
+      <div id="sliders"></div>
+    </div>
+    <div id="viewport"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
