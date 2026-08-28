@@ -4,11 +4,13 @@ Not-yet-built features and known gaps. Check [decisions.md](decisions.md) for th
 
 ## Construction methods
 
-- [ ] Timber-framed, hybrid, and metal-framed construction methods (any
-      obstacle type) — these need a real dimensional-timber/steel stock
-      catalog and published span tables, and should render actual
-      structural geometry (posts/joists/decking), not just a BOM (see
-      decisions.md).
+- [ ] Timber-framed for berm/kicker, and hybrid/metal-framed construction
+      methods (any obstacle type) — hybrid/metal still need a real
+      dimensional-steel stock catalog and published span tables, and
+      should render actual structural geometry, not just a BOM (see
+      decisions.md). Timber-framed roller is built — reuse its rib-and-deck
+      approach and `timberStock.ts` catalog for berm/kicker rather than
+      inventing a new one.
 - [ ] Berm and kicker construction methods entirely (`IMPLEMENTED_METHODS`
       in `src/main.ts` lists none for either yet).
 - [ ] Soil-type selection (currently one conservative default).

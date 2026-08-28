@@ -19,15 +19,31 @@ export const ROLLER_DEFAULTS: RollerParams = {
 
 const SEGMENTS_PER_PERIOD = 24;
 
+/** Sine-wave hump height at an arbitrary length position — shared by the profile sampler
+ * below and by anything else (e.g. timber rib placement) that needs the height at a
+ * specific x rather than the fixed render-resolution samples. */
+export function rollerHeightAt(x: number, params: RollerParams): number {
+  const { length, height, periods } = params;
+  return (height / 2) * (1 - Math.cos((2 * Math.PI * periods * x) / length));
+}
+
+/** Slope (dy/dx) of the height profile at an arbitrary length position — the derivative of
+ * {@link rollerHeightAt}, same formula slopeCheck.ts's steepest-tangent check is derived
+ * from, generalized here to an arbitrary x instead of just the steepest point. Used to tilt
+ * timber decking boards to the local tangent (see rollerTimberFrame.ts). */
+export function rollerSlopeAt(x: number, params: RollerParams): number {
+  const { length, height, periods } = params;
+  return ((height * Math.PI * periods) / length) * Math.sin((2 * Math.PI * periods * x) / length);
+}
+
 /** Sine-wave hump profile points from (0,0) to (length,0), used by both the 3D geometry and the earthen BOM's cross-sectional area so the two never drift apart. */
 export function rollerProfilePoints(params: RollerParams): [number, number][] {
-  const { length, height, periods } = params;
+  const { length, periods } = params;
   const segments = SEGMENTS_PER_PERIOD * periods;
   const points: [number, number][] = [[0, 0]];
   for (let i = 1; i <= segments; i++) {
     const x = (i / segments) * length;
-    const y = (height / 2) * (1 - Math.cos((2 * Math.PI * periods * x) / length));
-    points.push([x, y]);
+    points.push([x, rollerHeightAt(x, params)]);
   }
   points.push([length, 0]);
   return points;
