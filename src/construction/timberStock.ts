@@ -20,7 +20,7 @@
  */
 export const TIMBER_STOCK = {
   postSizeM: { width: 0.07, depth: 0.045 }, // 70x45mm — posts holding the rails up
-  railSizeM: { width: 0.09, depth: 0.045 }, // 90x45mm — curved rails, see rollerTimberFrame.ts
+  railSizeM: { width: 0.045, depth: 0.09 }, // 90x45mm on edge (short face horizontal, long face vertical) — stiffer against bending than laid flat, see rollerTimberFrame.ts
   deckingBoardWidthM: 0.15,
   deckingBoardThicknessM: 0.028,
   deckingBoardGapM: 0.005,

@@ -3,7 +3,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { buildRollerGeometry, ROLLER_DEFAULTS, type RollerParams } from "./obstacles/roller";
 import { buildBermGeometry, BERM_DEFAULTS, type BermParams } from "./obstacles/berm";
 import { buildKickerGeometry, KICKER_DEFAULTS, type KickerParams } from "./obstacles/kicker";
-import { checkRollerSlope } from "./construction/slopeCheck";
+import { checkRollerRideability, checkRollerSlope } from "./construction/slopeCheck";
 import { calculateRollerEarthenBom } from "./construction/earthenBom";
 import {
   buildRailGeometry,
@@ -87,7 +87,7 @@ const OBSTACLES: Record<ObstacleType, ObstacleSpec<any>> = {
   roller: {
     defaults: ROLLER_DEFAULTS,
     sliders: [
-      { key: "length", label: "Length (m)", min: 1, max: 8, step: 0.1 },
+      { key: "length", label: "Length (m)", min: 1, max: 12, step: 0.1 },
       { key: "height", label: "Height (m)", min: 0.1, max: 1.5, step: 0.05 },
       { key: "widthStart", label: "Width at start (m)", min: 0.5, max: 3, step: 0.1 },
       { key: "widthEnd", label: "Width at end (m)", min: 0.5, max: 3, step: 0.1 },
@@ -120,6 +120,7 @@ const viewport = document.getElementById("viewport")!;
 const typeSelect = document.getElementById("type-select") as HTMLSelectElement;
 const methodSelect = document.getElementById("method-select") as HTMLSelectElement;
 const slidersEl = document.getElementById("sliders")!;
+const rideabilityWarningEl = document.getElementById("rideability-warning")!;
 const methodOptionsEl = document.getElementById("method-options")!;
 const resetBtn = document.getElementById("reset-btn")!;
 const drawingsListEl = document.getElementById("drawings-list")!;
@@ -170,6 +171,7 @@ viewport.appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 0.3, 0);
+controls.zoomToCursor = true; // built-in OrbitControls option — scroll-zoom centers on the pointer
 
 const ambient = new THREE.AmbientLight(0xffffff, 0.6);
 const sun = new THREE.DirectionalLight(0xffffff, 1.4);
@@ -253,7 +255,7 @@ scene.add(dimensionsGroup);
 let currentParams: any = { ...OBSTACLES.roller.defaults };
 let currentMethod: ConstructionMethod = "earthen";
 let currentCenterRail = false;
-let currentAdditionalPostsPerSection = 1; // 1 extra (a midpoint) per section, on top of the always-present boundary posts
+let currentAdditionalPostsPerSection = 0; // none extra by default, just the always-present boundary posts
 
 function rebuildObstacle(type: ObstacleType): void {
   const geometry = OBSTACLES[type].build(currentParams);
@@ -601,6 +603,27 @@ function renderMethodControls(type: ObstacleType, method: ConstructionMethod): v
   }
 }
 
+/** Warns regardless of construction method — the roller's steepness comes from its own
+ * length/height/periods sliders, not from how it's built. Hidden entirely when ridable or
+ * not a roller, rather than always showing a "you're fine" badge, since this is a warning,
+ * not a status readout (unlike the earthen tab's soil-stability badge). */
+function renderRideabilityWarning(type: ObstacleType): void {
+  if (type !== "roller") {
+    rideabilityWarningEl.hidden = true;
+    return;
+  }
+  const result = checkRollerRideability(currentParams as RollerParams);
+  rideabilityWarningEl.hidden = result.ridable;
+  if (!result.ridable) {
+    rideabilityWarningEl.innerHTML = `Too steep to ride: ${result.maxAngleDeg.toFixed(1)}° (max rideable ~${result.maxRideableAngleDeg}°) ${infoIcon("Steepest tangent of the roller's own profile exceeds the steepest real-world roller example on record (research/rollers.md, ~38° at a 10:2.5 length:height ratio) — reduce height, increase length, or lower periods.")}`;
+    // Safari doesn't focus a button on click by default; force it so the delegated
+    // document-level tooltip handler (which reacts to focus) also opens on click.
+    rideabilityWarningEl.querySelector<HTMLElement>(".info-icon")?.addEventListener("click", function () {
+      this.focus();
+    });
+  }
+}
+
 function renderSliders(type: ObstacleType): void {
   slidersEl.innerHTML = "";
   for (const spec of OBSTACLES[type].sliders) {
@@ -626,6 +649,7 @@ function renderSliders(type: ObstacleType): void {
       rebuildDimensions(type);
       renderBom(type, currentMethod);
       rebuildPartDrawings(type, currentMethod);
+      renderRideabilityWarning(type);
     });
 
     row.append(label, input);
@@ -643,6 +667,7 @@ function selectType(type: ObstacleType): void {
   rebuildStructure(type, currentMethod);
   renderBom(type, currentMethod);
   rebuildPartDrawings(type, currentMethod);
+  renderRideabilityWarning(type);
 }
 
 function resetParams(): void {
@@ -654,6 +679,7 @@ function resetParams(): void {
   rebuildDimensions(type);
   renderBom(type, currentMethod);
   rebuildPartDrawings(type, currentMethod);
+  renderRideabilityWarning(type);
 }
 
 typeSelect.addEventListener("change", () => selectType(typeSelect.value as ObstacleType));

@@ -34,7 +34,9 @@ than also re-running `renderMethodOptions`.
 ## Scene
 
 `src/main.ts`: `PerspectiveCamera` + `OrbitControls` (no damping — rotate/
-pan/zoom all stop instantly), ambient + raking directional light with
+pan/zoom all stop instantly, `zoomToCursor = true` so scroll-zoom centers on
+the pointer rather than the orbit target — same as `../half-pipe`/
+`../kicker`), ambient + raking directional light with
 shadows, a flat ground plane, flat-shaded solid-color materials (schematic
 style, no textures). The ground plane's material sets `polygonOffset`
 (pushes its rasterized depth back slightly, no vertex movement) so
@@ -74,9 +76,18 @@ check for earthen, rail/section counts for timber) above the table.
 
 - `soil.ts` — `DEFAULT_SOIL_PROFILE` (safe slope angle, compaction waste
   factor), see [decisions.md](decisions.md) for sourcing.
-- `slopeCheck.ts` — `checkRollerSlope`: the roller's sine profile's
-  steepest tangent angle (`height * pi * periods / length`, i.e. where the
-  sine derivative peaks) compared against the soil profile's safe angle.
+- `slopeCheck.ts` — the roller's sine profile's steepest tangent angle
+  (`height * pi * periods / length`, i.e. where the sine derivative peaks)
+  feeds two independent checks: `checkRollerSlope` compares it against the
+  soil profile's safe angle (earthen only, shown in the BOM tab's status
+  badge), and `checkRollerRideability` compares it against
+  `MAX_RIDEABLE_ANGLE_DEG` (38°, from `research/rollers.md`'s steepest cited
+  real-world example) to flag the roller itself as too steep to comfortably
+  ride, regardless of construction method. `renderRideabilityWarning` in
+  `src/main.ts` renders this as a `#rideability-warning` banner below the
+  sliders (only for roller, only when unridable — hidden otherwise, unlike
+  the always-visible BOM status badges), refreshed on every slider change,
+  type switch, and reset.
 - `earthenBom.ts` — `calculateRollerEarthenBom`: compacted fill volume via
   trapezoidal integration of cross-sectional area (`y(x) * rollerWidthAt(x,
   params)`) along the roller's own profile samples (`rollerProfilePoints`,
@@ -164,7 +175,7 @@ check for earthen, rail/section counts for timber) above the table.
   `LineSegments` are already kept current by every `rebuildStructure`;
   unchecked by default), a "Posts"
   section with an "Additional posts per section" range slider (0–4,
-  default 1, drives
+  default 0, drives
   `currentAdditionalPostsPerSection`/`additionalPostsPerSection` above —
   a full `rebuildStructure`/`renderBom`/`rebuildPartDrawings` on change,
   same as the centre-rail checkbox), three "Wireframe" checkboxes

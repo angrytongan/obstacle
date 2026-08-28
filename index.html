@@ -230,6 +230,13 @@
         font-size: 0.8rem;
         margin-bottom: 0.75rem;
       }
+      /* [hidden] and .bom-status both have one-selector specificity, and author styles win
+         that tie over the UA stylesheet's [hidden] { display: none }, so .bom-status's own
+         `display` would otherwise always beat `.hidden = true` — this rule's extra ID
+         selector breaks the tie back in `hidden`'s favor. */
+      #rideability-warning[hidden] {
+        display: none;
+      }
       .bom-status.safe {
         background: #1a7f371a;
         color: #1a7f37;
@@ -422,6 +429,7 @@
         </select>
         <select id="method-select"></select>
         <div id="sliders"></div>
+        <div id="rideability-warning" class="bom-status unsafe" hidden></div>
         <div id="method-options"></div>
         <button type="button" id="reset-btn">Reset to defaults</button>
       </div>

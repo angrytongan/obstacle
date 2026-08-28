@@ -32,6 +32,24 @@ Scope/architecture decisions, so they don't need re-asking each session. Update 
   the other. This is why `roller.ts` is hand-built `BufferGeometry` (four
   ruled quad strips) rather than `THREE.Shape` + `ExtrudeGeometry` — extrude
   can't vary its depth along the path.
+- **A separate "too steep to ride" warning exists alongside the earthen
+  soil-stability check**, not reusing it — `checkRollerSlope`'s 34°
+  threshold is OSHA's soil angle of repose (whether the *dirt* stays put),
+  which only makes sense for the earthen method and isn't a rideability
+  limit. `checkRollerRideability` (`slopeCheck.ts`) compares the same
+  steepest-tangent-angle formula against `MAX_RIDEABLE_ANGLE_DEG` (38°)
+  instead — the steepest real-world example `research/rollers.md`'s
+  length:height ratio table cites (10:2.5 ratio, Lee McCormack). That table
+  was cross-checked against the formula before picking the threshold: a
+  10:1 ratio (this app's default-ish shape) predicts 14–17° in the table
+  and the formula gives 17.4°; the 10:2.5 ratio predicts ~38° and the
+  formula gives 38.1° — close enough to trust the formula as the same
+  quantity the research calls "takeoff angle". Applies to both construction
+  methods (the roller's steepness comes from its own params, not how it's
+  built), rendered as a warning banner below the sliders
+  (`#rideability-warning`/`renderRideabilityWarning` in `src/main.ts`) —
+  hidden when ridable, unlike the BOM tab's always-visible status badges,
+  since this is meant to interrupt, not report a steady-state number.
 
 ## Construction method / BOM
 
@@ -79,11 +97,11 @@ Scope/architecture decisions, so they don't need re-asking each session. Update 
   configurable** — a joint where two curved rail pieces meet needs
   support regardless of anything the user picks, so `postXPositions`
   places one there unconditionally. The user-facing "Additional posts per
-  section" slider (0–4, default 1) only controls how many *more* go in,
-  equally spaced strictly between each pair of consecutive boundaries.
-  `0` means just the mandatory boundary posts; `1` adds a midpoint to
-  every section (the app's original fixed scheme); higher values pack
-  more in. This went through two earlier, wrong readings before landing
+  section" slider (0–4, default 0 — just the mandatory boundary posts)
+  only controls how many *more* go in, equally spaced strictly between
+  each pair of consecutive boundaries. `1` adds a midpoint to every
+  section (the app's original fixed scheme, since dropped as the
+  default); higher values pack more in. This went through two earlier, wrong readings before landing
   here: first a *per-section* density (`1` meant one post per section,
   several per rail, with no post guaranteed at any particular joint), then
   a *per-rail total* with no mandatory joints at all (so `1` could land
@@ -180,6 +198,23 @@ Scope/architecture decisions, so they don't need re-asking each session. Update 
   the app's meter-based params throughout, not a full engineered size
   range, and kept generic (not roller-specific) for berm/kicker's timber
   methods to reuse later.
+- **Rails stand on edge** — `railSizeM` is `{ width: 0.045, depth: 0.09 }`,
+  i.e. the 90mm face is vertical and the 45mm face is horizontal. A rail
+  bends under vertical load (rider weight, gravity), and bending stiffness
+  goes with the *cube* of the depth in the bending direction — standing the
+  longer face vertical (like a joist) resists that bending far better than
+  laying it flat would. Only `railSizeM` changed; `postSizeM` stays as-is
+  since posts see mostly axial/embedment load, not bending along their
+  length.
+- **Roller length maxes out at 12m** (`main.ts`'s slider spec), up from an
+  earlier 8m cap — checked against `slopeCheck.ts`'s steepest-tangent
+  formula (`maxSlope = height * π * periods / length`) before raising it:
+  the formula only depends on the `periods/length` *ratio*, so a period-4,
+  12m roller has the exact same steepest tangent (and so the same
+  slope-safety verdict) as the period-1, 3m default — raising the length
+  cap doesn't on its own risk producing an unsafe slope that wasn't already
+  reachable at the old cap, since periods and length still have independent
+  slider ranges. `slopeCheck.test.ts` locks this invariant in.
 - **Timber method hides the solid mound mesh and shows the open post/rail/
   deck structure instead** (`rebuildStructure` in `src/main.ts`) — unlike
   earthen, which keeps the plain hump mesh since dirt has no frame to
