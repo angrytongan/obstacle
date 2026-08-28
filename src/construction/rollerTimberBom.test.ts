@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { calculateRollerTimberBom } from "./rollerTimberBom";
-import { buildRollerTimberFrame, groupPostsByLength } from "./rollerTimberFrame";
+import { buildRollerTimberFrame, groupMembersByLength } from "./rollerTimberFrame";
 import { ROLLER_DEFAULTS } from "../obstacles/roller";
 import { TIMBER_STOCK } from "./timberStock";
 
@@ -18,7 +18,7 @@ describe("calculateRollerTimberBom", () => {
   it("matches the frame layout's grouped post lengths/counts and rail section count", () => {
     const bom = calculateRollerTimberBom(ROLLER_DEFAULTS, false, 2);
     const frame = buildRollerTimberFrame(ROLLER_DEFAULTS, false, 2);
-    expect(bom.postGroups).toEqual(groupPostsByLength(frame.posts));
+    expect(bom.postGroups).toEqual(groupMembersByLength(frame.posts, 1));
     expect(bom.railSectionCount).toBe(frame.sectionsPerRail * frame.railZOffsets.length);
   });
 
@@ -41,6 +41,21 @@ describe("calculateRollerTimberBom", () => {
     const frame = buildRollerTimberFrame(params, false, 2);
     const rawTotal = frame.deckingBoards.reduce((sum, board) => sum + board.size[2], 0);
     expect(bom.deckingBoardLinearMetersM).toBeCloseTo(rawTotal * TIMBER_STOCK.boardWasteFactor, 5);
+  });
+
+  it("matches the frame layout's grouped decking board spans/counts, one group when untapered", () => {
+    const params = { ...ROLLER_DEFAULTS, widthStart: 1, widthEnd: 1 };
+    const bom = calculateRollerTimberBom(params, false, 2);
+    const frame = buildRollerTimberFrame(params, false, 2);
+    expect(bom.deckingBoardGroups).toEqual(groupMembersByLength(frame.deckingBoards, 2));
+    expect(bom.deckingBoardGroups).toHaveLength(1);
+  });
+
+  it("splits decking boards into multiple groups when the roller's width tapers", () => {
+    const params = { ...ROLLER_DEFAULTS, widthStart: 0.5, widthEnd: 2.5 };
+    const bom = calculateRollerTimberBom(params, false, 2);
+    expect(bom.deckingBoardGroups.length).toBeGreaterThan(1);
+    expect(bom.deckingBoardGroups.reduce((sum, g) => sum + g.count, 0)).toBe(bom.deckingBoardCount);
   });
 
   it("includes the embedment depth in every post group's total length", () => {

@@ -14,8 +14,30 @@ Scope/architecture decisions, so they don't need re-asking each session. Update 
   assembled roller), not a site/plan view — a different thing this
   decision was never about.
 - **Params reset to type defaults on switching obstacle type** — no
-  per-type state persisted while the page is open. A "Reset to defaults"
-  button does the same for the current type without switching.
+  per-type state persisted while the page is open (switching roller→berm→
+  roller doesn't bring your roller tweaks back). A "Reset to defaults"
+  button does the same for the current type without switching. Distinct
+  from the undo/redo + localStorage feature below, which persists the
+  *whole app's* one current state across a reload, not a separate memory
+  per type.
+- **Undo/redo + localStorage persistence, ported from `../kicker`'s design**
+  (not `../half-pipe`'s older one) — a single `AppState` (type, method,
+  params, centre-rail, additional-posts-per-section, rail outline, and
+  every component's wireframe/show toggle) is both the one thing saved to
+  `localStorage` and the history's "present" (`src/history.ts`'s generic,
+  immutable `{ past, present, future }`, also ported from kicker verbatim).
+  Half-pipe instead keeps a separate mutable `HistoryStack` class and an
+  independent `persistControls()` blob that has to be kept in sync by
+  convention — kicker's single-source-of-truth version has fewer moving
+  parts, so this app follows it. Switching obstacle type or construction
+  method is itself one undo step (unlike the sibling apps, which only ever
+  have one shape to begin with) — `applyState` restores a past type+method
+  combo by re-running `renderMethodOptions` (which normally resets to that
+  type's first implemented method) and then overriding back to the
+  historical method if it's still implemented for that type. A slider drag
+  stays one undo step, not one per tick, the same way as the sibling apps:
+  the `input` event updates the live preview only, a sibling `change`
+  listener (fires once on release) calls `commit()`.
 - **Deployed to GitHub Pages**, not a custom host — a static Vite build
   with no backend needs nothing more. Pushes to `main` build and deploy
   automatically via `.github/workflows/deploy.yml`, gated on
@@ -117,19 +139,29 @@ Scope/architecture decisions, so they don't need re-asking each session. Update 
   center shifts down by half the embedment depth accordingly (see
   `buildRollerTimberFrame`'s post loop) so the *above-ground* portion still
   reaches exactly the rail's underside.
-- **Posts are listed exactly in the parts list and 2D drawings, not
-  averaged** — unlike rails and decking boards (averaged for less
-  implementation work, see below), `groupPostsByLength` groups posts by
-  their (rounded) total length and lists every distinct length with its
-  own count, in both `rollerTimberBom.ts` and `rollerTimberPartDrawings.ts`
-  (`postPartDrawings`, plural). This isn't inconsistent with the
-  rails/decking averaging decision below — posts come in only a handful of
+- **Posts and decking boards are both listed exactly in the parts list and
+  2D drawings, not averaged** — `groupMembersByLength(members, axis)` in
+  `rollerTimberFrame.ts` groups either by their (rounded) length along a
+  given `size` axis (1 for posts' height, 2 for decking boards'
+  width-spanning length) and lists every distinct length with its own
+  count, shared by `rollerTimberBom.ts` (`postGroups`/
+  `deckingBoardGroups`) and `rollerTimberPartDrawings.ts`
+  (`postPartDrawings`/`deckingBoardPartDrawings`, both plural) so neither
+  can group differently from the other. Posts come in only a handful of
   truly distinct lengths (the height profile repeats every period, and
-  every rail's posts at a given x share the same height), so listing them
-  exactly is barely more work than averaging would have been, unlike rail
-  sections (continuous curve, no natural discrete grouping without
-  reworking `rollerTimberFrame.ts`'s data shape) or decking boards
-  (continuously variable under a width taper).
+  every rail's posts at a given x share the same height); decking boards
+  collapse to one group when the roller's width doesn't taper (every board
+  shares the same span) and split into more — often one-each — under a
+  taper, since a board's span is a continuous function of its position.
+  Decking boards were originally averaged (see below), the same as rail
+  sections — that held up until a tapered roller needed every distinct
+  board span called out for cutting, not one representative number, so
+  decking was moved onto the exact-listing path posts already used. Rail
+  sections stay averaged: unlike a board's span (a plain number), a
+  section's *shape* is a curve that can't be "averaged" the way a length
+  can, and grouping the curve itself would mean reworking
+  `rollerTimberFrame.ts`'s data shape for comparatively little payoff (by
+  symmetry there are at most 2 distinct section shapes per period anyway).
 - **Edge rails run straight in Z (don't follow the width taper)** — inset
   half a rail-width from the *narrowest* point of the footprint
   (`edgeRailZOffset` in `rollerTimberFrame.ts`), so a rail never sticks out
@@ -285,17 +317,23 @@ Scope/architecture decisions, so they don't need re-asking each session. Update 
   BOM" above), unlike the sibling apps' plain tables (just one disclaimer
   line, no per-row citations) — this app has leaned on citing sources
   throughout, and dropping them would lose real content, not just markup.
-- **Parts whose real size varies (rail sections, decking boards) report an
-  average**, not exact per-length grouping — chosen for less
-  implementation work than exact grouping (half-pipe does the latter for
-  its own BOM, where every part sharing a row is dimensionally identical).
-  The existing "planning estimate, not a substitute for a qualified
-  builder's assessment" disclaimer already covers this level of
-  approximation. **Posts are the one exception** — they're grouped and
-  listed exactly (see "Timber-framed roller is curved rails on posts"
-  above), once it turned out posts only ever come in a handful of
-  genuinely distinct lengths, making exact grouping barely more work than
-  averaging.
+- **Parts whose real size varies report exact per-length grouping, not an
+  average — except rail sections.** This was originally an average for
+  every varying part (chosen for less implementation work than exact
+  grouping; half-pipe does the latter for its own BOM, where every part
+  sharing a row is dimensionally identical), with posts as the one
+  exception once it turned out they only ever come in a handful of
+  genuinely distinct lengths (see "Timber-framed roller is curved rails on
+  posts" above), making exact grouping barely more work than averaging.
+  Decking boards later moved onto the same exact path once a tapered
+  roller's "one average board length" stopped being good enough — real
+  cut lists need every distinct span, not a representative number (see
+  "Posts and decking boards are both listed exactly" above). Rail sections
+  are the one part still averaged: a section's shape is a curve, not a
+  plain length, so "exact grouping" would mean comparing curves, not
+  numbers — the existing "planning estimate, not a substitute for a
+  qualified builder's assessment" disclaimer covers this remaining
+  approximation.
 - **The 2D drawings engine (`src/drawings/`) is ported from
   `../half-pipe/src/drawings/`**, not reinvented — `svgDimension.ts` and
   `renderPartDrawing.ts` were already generic (no half-pipe-specific

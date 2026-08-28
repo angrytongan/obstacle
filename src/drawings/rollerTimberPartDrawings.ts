@@ -1,6 +1,6 @@
 import type { RollerParams } from "../obstacles/roller";
 import { rollerHeightAt } from "../obstacles/roller";
-import { buildRollerTimberFrame, groupPostsByLength, type TimberMember } from "../construction/rollerTimberFrame";
+import { buildRollerTimberFrame, groupMembersByLength } from "../construction/rollerTimberFrame";
 import { TIMBER_STOCK } from "../construction/timberStock";
 import type { Point } from "./svgDimension";
 
@@ -36,14 +36,6 @@ function formatMm(valueMm: number): string {
 // proportionally sensible spacing. Same factors half-pipe's halfPipePartDrawings.ts uses.
 const OFFSET_FACTOR = 0.12;
 const LABEL_OFFSET_FACTOR = OFFSET_FACTOR * 3;
-
-/** Average of a member array's extent along one axis (0=x, 1=y, 2=z) of `size` — shared by the
- * decking board drawing below and the parts-list table (src/main.ts) so both report the same
- * number for a part whose real size varies (decking board span), rather than each computing
- * it independently. */
-export function averageMemberLength(members: TimberMember[], axis: 0 | 1 | 2): number {
-  return members.reduce((total, m) => total + m.size[axis], 0) / members.length;
-}
 
 /**
  * One box-shaped part, drawn as a length x height rectangle (its own face/elevation view) with
@@ -124,13 +116,13 @@ export function railSectionPartDrawing(params: RollerParams): PartDrawing {
   };
 }
 
-/** Posts vary in height along the curve (see rollerTimberFrame.ts) — unlike rails/decking,
- * every distinct post length gets its own drawing (see groupPostsByLength), not an average,
+/** Posts vary in height along the curve (see rollerTimberFrame.ts) — unlike rail sections,
+ * every distinct post length gets its own drawing (see groupMembersByLength), not an average,
  * so the quantity and exact cut length for each is always listed. */
 export function postPartDrawings(params: RollerParams, centerRail: boolean, additionalPostsPerSection: number): PartDrawing[] {
   const frame = buildRollerTimberFrame(params, centerRail, additionalPostsPerSection);
   const { postSizeM, postEmbedmentDepthM } = TIMBER_STOCK;
-  return groupPostsByLength(frame.posts).map(({ totalLengthM, count }) => {
+  return groupMembersByLength(frame.posts, 1).map(({ totalLengthM, count }) => {
     const drawing = rectanglePartDrawing(
       `Post — ${count}x`,
       totalLengthM * 1000,
@@ -142,28 +134,22 @@ export function postPartDrawings(params: RollerParams, centerRail: boolean, addi
   });
 }
 
-/** Decking boards vary in length (their span across the width) when the roller tapers — this
- * drawing uses the average, computed from the same frame layout the 3D view and parts list
- * use, not the parts list's waste-adjusted order total. */
-export function deckingBoardPartDrawing(params: RollerParams, centerRail: boolean, additionalPostsPerSection: number): PartDrawing {
+/** Decking boards vary in span (their length across the width) when the roller tapers — same
+ * treatment as posts: grouped and listed exactly (see groupMembersByLength), not averaged, so
+ * every distinct board span gets its own drawing. One drawing when the roller doesn't taper
+ * (every board shares the same span). */
+export function deckingBoardPartDrawings(params: RollerParams, centerRail: boolean, additionalPostsPerSection: number): PartDrawing[] {
   const frame = buildRollerTimberFrame(params, centerRail, additionalPostsPerSection);
   const { deckingBoardWidthM, deckingBoardThicknessM } = TIMBER_STOCK;
-  const drawing = rectanglePartDrawing(
-    "Decking board",
-    averageMemberLength(frame.deckingBoards, 2) * 1000,
-    deckingBoardWidthM * 1000,
-    deckingBoardThicknessM * 1000,
+  return groupMembersByLength(frame.deckingBoards, 2).map(({ totalLengthM, count }) =>
+    rectanglePartDrawing(`Decking board — ${count}x`, totalLengthM * 1000, deckingBoardWidthM * 1000, deckingBoardThicknessM * 1000),
   );
-  if (params.widthStart !== params.widthEnd) {
-    drawing.labels.lines.push("Length is an average — boards vary with the roller's width taper, see parts list");
-  }
-  return drawing;
 }
 
 export function allRollerTimberPartDrawings(params: RollerParams, centerRail: boolean, additionalPostsPerSection: number): PartDrawing[] {
   return [
     railSectionPartDrawing(params),
     ...postPartDrawings(params, centerRail, additionalPostsPerSection),
-    deckingBoardPartDrawing(params, centerRail, additionalPostsPerSection),
+    ...deckingBoardPartDrawings(params, centerRail, additionalPostsPerSection),
   ];
 }

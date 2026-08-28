@@ -1,25 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   allRollerTimberPartDrawings,
-  averageMemberLength,
-  deckingBoardPartDrawing,
+  deckingBoardPartDrawings,
   postPartDrawings,
   railSectionPartDrawing,
 } from "./rollerTimberPartDrawings";
-import { buildRollerTimberFrame, groupPostsByLength, type TimberMember } from "../construction/rollerTimberFrame";
+import { buildRollerTimberFrame, groupMembersByLength } from "../construction/rollerTimberFrame";
 import { ROLLER_DEFAULTS } from "../obstacles/roller";
 import { TIMBER_STOCK } from "../construction/timberStock";
-
-describe("averageMemberLength", () => {
-  it("matches a hand-computed mean", () => {
-    const members: TimberMember[] = [
-      { position: [0, 0, 0], size: [1, 2, 3] },
-      { position: [0, 0, 0], size: [1, 4, 9] },
-    ];
-    expect(averageMemberLength(members, 1)).toBeCloseTo(3, 10);
-    expect(averageMemberLength(members, 2)).toBeCloseTo(6, 10);
-  });
-});
 
 describe("railSectionPartDrawing", () => {
   it("spans one quarter-period in mm, and the rail's own depth vertically at each x", () => {
@@ -37,10 +25,10 @@ describe("railSectionPartDrawing", () => {
   });
 });
 
-describe("postPartDrawings / deckingBoardPartDrawing", () => {
-  it("returns one drawing per distinct post length, matching groupPostsByLength", () => {
+describe("postPartDrawings / deckingBoardPartDrawings", () => {
+  it("returns one drawing per distinct post length, matching groupMembersByLength", () => {
     const frame = buildRollerTimberFrame(ROLLER_DEFAULTS, false, 2);
-    const groups = groupPostsByLength(frame.posts);
+    const groups = groupMembersByLength(frame.posts, 1);
     const drawings = postPartDrawings(ROLLER_DEFAULTS, false, 2);
     expect(drawings).toHaveLength(groups.length);
     drawings.forEach((drawing, i) => {
@@ -57,21 +45,34 @@ describe("postPartDrawings / deckingBoardPartDrawing", () => {
     }
   });
 
-  it("notes the decking average only when the roller's width tapers", () => {
-    const flat = deckingBoardPartDrawing({ ...ROLLER_DEFAULTS, widthStart: 1, widthEnd: 1 }, false, 2);
-    const tapered = deckingBoardPartDrawing({ ...ROLLER_DEFAULTS, widthStart: 0.5, widthEnd: 1.5 }, false, 2);
-    expect(flat.labels.lines.some((l) => l.includes("average"))).toBe(false);
-    expect(tapered.labels.lines.some((l) => l.includes("average"))).toBe(true);
+  it("returns one decking board drawing when the roller's width doesn't taper", () => {
+    const flat = deckingBoardPartDrawings({ ...ROLLER_DEFAULTS, widthStart: 1, widthEnd: 1 }, false, 2);
+    expect(flat).toHaveLength(1);
+  });
+
+  it("returns one drawing per distinct decking board span when the roller's width tapers, matching groupMembersByLength", () => {
+    const params = { ...ROLLER_DEFAULTS, widthStart: 0.5, widthEnd: 1.5 };
+    const frame = buildRollerTimberFrame(params, false, 2);
+    const groups = groupMembersByLength(frame.deckingBoards, 2);
+    const drawings = deckingBoardPartDrawings(params, false, 2);
+    expect(drawings.length).toBeGreaterThan(1);
+    expect(drawings).toHaveLength(groups.length);
+    drawings.forEach((drawing, i) => {
+      const lengthMm = drawing.outline[0][1][0] - drawing.outline[0][0][0];
+      expect(lengthMm).toBeCloseTo(groups[i].totalLengthM * 1000, 5);
+      expect(drawing.title).toContain(`${groups[i].count}x`);
+    });
   });
 });
 
 describe("allRollerTimberPartDrawings", () => {
-  it("returns rail section, one drawing per post-length group, then decking board", () => {
+  it("returns rail section, one drawing per post-length group, then one per decking-span group", () => {
     const frame = buildRollerTimberFrame(ROLLER_DEFAULTS, false, 2);
-    const postGroupCount = groupPostsByLength(frame.posts).length;
+    const postGroupCount = groupMembersByLength(frame.posts, 1).length;
+    const deckingGroupCount = groupMembersByLength(frame.deckingBoards, 2).length;
     const drawings = allRollerTimberPartDrawings(ROLLER_DEFAULTS, false, 2);
     expect(drawings[0].title).toBe("Rail section");
-    expect(drawings[drawings.length - 1].title).toBe("Decking board");
-    expect(drawings).toHaveLength(2 + postGroupCount);
+    expect(drawings[drawings.length - 1].title).toContain("Decking board");
+    expect(drawings).toHaveLength(1 + postGroupCount + deckingGroupCount);
   });
 });

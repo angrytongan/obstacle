@@ -99,6 +99,20 @@
         margin-bottom: 1rem;
         cursor: pointer;
       }
+      .history-buttons {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+      }
+      .history-buttons button {
+        flex: 1;
+        padding: 0.4rem;
+        cursor: pointer;
+      }
+      .history-buttons button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
       .method-option-row {
         display: flex;
         align-items: center;
@@ -422,6 +436,10 @@
     </header>
     <div class="app">
       <div id="panel">
+        <div class="history-buttons">
+          <button type="button" id="undo-btn" disabled>Undo</button>
+          <button type="button" id="redo-btn" disabled>Redo</button>
+        </div>
         <select id="type-select">
           <option value="roller">Roller</option>
           <option value="berm">Berm</option>

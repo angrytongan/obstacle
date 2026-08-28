@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRailGeometry, buildRailOutlineGeometry, buildRollerTimberFrame, groupPostsByLength } from "./rollerTimberFrame";
+import { buildRailGeometry, buildRailOutlineGeometry, buildRollerTimberFrame, groupMembersByLength } from "./rollerTimberFrame";
 import { ROLLER_DEFAULTS, rollerHeightAt, rollerProfilePoints, rollerSlopeAt, rollerWidthAt } from "../obstacles/roller";
 import { TIMBER_STOCK } from "./timberStock";
 
@@ -152,16 +152,30 @@ describe("buildRollerTimberFrame", () => {
   });
 });
 
-describe("groupPostsByLength", () => {
+describe("groupMembersByLength", () => {
   it("groups posts sharing a (rounded) total length into one entry, longest first", () => {
     const frame = buildRollerTimberFrame(ROLLER_DEFAULTS, false, 2);
-    const groups = groupPostsByLength(frame.posts);
+    const groups = groupMembersByLength(frame.posts, 1);
     expect(groups.reduce((total, g) => total + g.count, 0)).toBe(frame.posts.length);
     for (let i = 1; i < groups.length; i++) {
       expect(groups[i - 1].totalLengthM).toBeGreaterThanOrEqual(groups[i].totalLengthM);
     }
     // The crest post and its mirror (same x-symmetric height) should be grouped together.
     expect(groups.some((g) => g.count > 1)).toBe(true);
+  });
+
+  it("groups decking boards into one entry when the roller's width doesn't taper", () => {
+    const flat = { ...ROLLER_DEFAULTS, widthStart: 1, widthEnd: 1 };
+    const frame = buildRollerTimberFrame(flat, false, 2);
+    expect(groupMembersByLength(frame.deckingBoards, 2)).toHaveLength(1);
+  });
+
+  it("splits decking boards into multiple entries when the roller's width tapers", () => {
+    const tapered = { ...ROLLER_DEFAULTS, widthStart: 0.5, widthEnd: 2.5 };
+    const frame = buildRollerTimberFrame(tapered, false, 2);
+    const groups = groupMembersByLength(frame.deckingBoards, 2);
+    expect(groups.length).toBeGreaterThan(1);
+    expect(groups.reduce((total, g) => total + g.count, 0)).toBe(frame.deckingBoards.length);
   });
 });
 

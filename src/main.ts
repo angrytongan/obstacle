@@ -15,7 +15,8 @@ import { calculateRollerTimberBom } from "./construction/rollerTimberBom";
 import { TIMBER_STOCK } from "./construction/timberStock";
 import { buildRollerDimensions } from "./dimensions/rollerDimensions";
 import { renderPartDrawing } from "./drawings/renderPartDrawing";
-import { allRollerTimberPartDrawings, averageMemberLength } from "./drawings/rollerTimberPartDrawings";
+import { allRollerTimberPartDrawings } from "./drawings/rollerTimberPartDrawings";
+import { createHistory, pushHistory, redoHistory, undoHistory, type History } from "./history";
 
 type ObstacleType = "roller" | "berm" | "kicker";
 type ConstructionMethod = "earthen" | "timber" | "hybrid" | "metal";
@@ -123,6 +124,8 @@ const slidersEl = document.getElementById("sliders")!;
 const rideabilityWarningEl = document.getElementById("rideability-warning")!;
 const methodOptionsEl = document.getElementById("method-options")!;
 const resetBtn = document.getElementById("reset-btn")!;
+const undoBtn = document.getElementById("undo-btn") as HTMLButtonElement;
+const redoBtn = document.getElementById("redo-btn") as HTMLButtonElement;
 const drawingsListEl = document.getElementById("drawings-list")!;
 const bomContainerEl = document.getElementById("bom-container")!;
 const tooltipEl = document.getElementById("tooltip")!;
@@ -251,11 +254,85 @@ structureGroup.add(railOutlinesGroup);
 const dimensionsGroup = new THREE.Group();
 scene.add(dimensionsGroup);
 
+// Per-component toggles for the timber structure — reads/writes the persistent material/
+// group objects directly (see makeTimberMaterial and postsGroup/railsGroup/deckingGroup
+// above), so no separate state or a rebuildStructure() call is needed on toggle, just a
+// property flip (material.wireframe, or group.visible for "Show"). Declared here (rather than
+// nearer renderCheckboxRowGroup, its only other reader) since AppState below needs it too.
+const COMPONENT_TOGGLES: { id: string; label: string; material: THREE.MeshStandardMaterial; group: THREE.Group }[] = [
+  { id: "rails", label: "Rails", material: railsMaterial, group: railsGroup },
+  { id: "posts", label: "Posts", material: postsMaterial, group: postsGroup },
+  { id: "decking", label: "Decking", material: deckingMaterial, group: deckingGroup },
+];
+
+/** Everything undo/redo/localStorage cares about — the caller owns applying one back (see
+ * applyState) and reading one off the live app (see snapshot). `wireframe`/`show` are keyed by
+ * COMPONENT_TOGGLES id since those two toggle groups live directly on Three.js
+ * materials/groups, not their own `let`s. */
+interface AppState {
+  type: ObstacleType;
+  method: ConstructionMethod;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  params: any;
+  centerRail: boolean;
+  additionalPostsPerSection: number;
+  railOutline: boolean;
+  wireframe: Record<string, boolean>;
+  show: Record<string, boolean>;
+}
+
+const STORAGE_KEY = "obstacle-app-state";
+
+function defaultToggles(value: boolean): Record<string, boolean> {
+  return Object.fromEntries(COMPONENT_TOGGLES.map((t) => [t.id, value]));
+}
+
+const DEFAULT_APP_STATE: AppState = {
+  type: "roller",
+  method: "earthen",
+  params: { ...OBSTACLES.roller.defaults },
+  centerRail: false,
+  additionalPostsPerSection: 0, // none extra by default, just the always-present boundary posts
+  railOutline: false,
+  wireframe: defaultToggles(false),
+  show: defaultToggles(true),
+};
+
+/** Reads persisted app state back, merged field-by-field over today's defaults rather than
+ * trusted outright — a future field addition/removal, or corrupted/foreign JSON (try/catch),
+ * then just falls back to that field's default instead of crashing or leaving it undefined.
+ * Returns DEFAULT_APP_STATE outright if nothing's saved yet. */
+function loadInitialState(): AppState {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return DEFAULT_APP_STATE;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed: any = JSON.parse(raw);
+    const type: ObstacleType = parsed.type in OBSTACLES ? parsed.type : DEFAULT_APP_STATE.type;
+    return {
+      type,
+      method: parsed.method ?? DEFAULT_APP_STATE.method,
+      params: { ...OBSTACLES[type].defaults, ...parsed.params },
+      centerRail: parsed.centerRail ?? DEFAULT_APP_STATE.centerRail,
+      additionalPostsPerSection: parsed.additionalPostsPerSection ?? DEFAULT_APP_STATE.additionalPostsPerSection,
+      railOutline: parsed.railOutline ?? DEFAULT_APP_STATE.railOutline,
+      wireframe: { ...DEFAULT_APP_STATE.wireframe, ...parsed.wireframe },
+      show: { ...DEFAULT_APP_STATE.show, ...parsed.show },
+    };
+  } catch {
+    return DEFAULT_APP_STATE;
+  }
+}
+
+let historyState: History<AppState> = createHistory(loadInitialState());
+
+// Live/draft view of the current control values — mutated directly during a slider drag for
+// instant preview, then folded into historyState as one step by commit() on drag release.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let currentParams: any = { ...OBSTACLES.roller.defaults };
-let currentMethod: ConstructionMethod = "earthen";
-let currentCenterRail = false;
-let currentAdditionalPostsPerSection = 0; // none extra by default, just the always-present boundary posts
+let currentParams: any = { ...historyState.present.params };
+let currentMethod: ConstructionMethod = historyState.present.method;
+let currentCenterRail = historyState.present.centerRail;
+let currentAdditionalPostsPerSection = historyState.present.additionalPostsPerSection;
 
 function rebuildObstacle(type: ObstacleType): void {
   const geometry = OBSTACLES[type].build(currentParams);
@@ -419,10 +496,7 @@ function renderRollerTimberStatusBadge(params: RollerParams): string {
 
 function renderRollerTimberBomRows(params: RollerParams): string {
   const bom = calculateRollerTimberBom(params, currentCenterRail, currentAdditionalPostsPerSection);
-  const frame = buildRollerTimberFrame(params, currentCenterRail, currentAdditionalPostsPerSection);
   const avgRailSectionMm = Math.round((bom.railLinearMetersM / bom.railSectionCount) * 1000);
-  const avgBoardMm = Math.round(averageMemberLength(frame.deckingBoards, 2) * 1000);
-  const isTapered = params.widthStart !== params.widthEnd;
   const embedmentMm = Math.round(TIMBER_STOCK.postEmbedmentDepthM * 1000);
 
   const postRows = bom.postGroups
@@ -432,10 +506,17 @@ function renderRollerTimberBomRows(params: RollerParams): string {
     )
     .join("");
 
+  const deckingRows = bom.deckingBoardGroups
+    .map(
+      ({ totalLengthM, count }) =>
+        `<tr><td><span class="bom-label">Decking board</span> ${infoIcon(BOM_INFO.timberDecking)}</td><td class="bom-qty">${count}</td><td>150x28mm, ${Math.round(totalLengthM * 1000)}mm</td><td>Solid timber decking board</td></tr>`,
+    )
+    .join("");
+
   return `
     <tr><td><span class="bom-label">Rail section</span> ${infoIcon(BOM_INFO.timberRails)}</td><td class="bom-qty">${bom.railSectionCount}</td><td>~${avgRailSectionMm}mm curved, 90x45mm</td><td>Structural timber (curved/laminated)</td></tr>
     ${postRows}
-    <tr><td><span class="bom-label">Decking board</span> ${infoIcon(BOM_INFO.timberDecking)}</td><td class="bom-qty">${bom.deckingBoardCount}</td><td>150x28mm, ${isTapered ? "~" : ""}${avgBoardMm}mm</td><td>Solid timber decking board</td></tr>
+    ${deckingRows}
   `;
 }
 
@@ -503,16 +584,6 @@ function renderMethodOptions(type: ObstacleType): void {
   methodSelect.value = currentMethod;
 }
 
-// Per-component toggles for the timber structure — reads/writes the persistent material/
-// group objects directly (see makeTimberMaterial and postsGroup/railsGroup/deckingGroup
-// above), so no separate state or a rebuildStructure() call is needed on toggle, just a
-// property flip (material.wireframe, or group.visible for "Show").
-const COMPONENT_TOGGLES: { id: string; label: string; material: THREE.MeshStandardMaterial; group: THREE.Group }[] = [
-  { id: "rails", label: "Rails", material: railsMaterial, group: railsGroup },
-  { id: "posts", label: "Posts", material: postsMaterial, group: postsGroup },
-  { id: "decking", label: "Decking", material: deckingMaterial, group: deckingGroup },
-];
-
 function renderCheckboxRowGroup(heading: string, idPrefix: string, checked: (id: string) => boolean): string {
   return `
     <div class="method-option-row method-option-heading">${heading}</div>
@@ -568,11 +639,13 @@ function renderMethodControls(type: ObstacleType, method: ConstructionMethod): v
     rebuildStructure(type, method);
     renderBom(type, method);
     rebuildPartDrawings(type, method);
+    commit();
   });
 
   const railOutlineCheckbox = methodOptionsEl.querySelector<HTMLInputElement>("#rail-outline-toggle")!;
   railOutlineCheckbox.addEventListener("change", () => {
     railOutlinesGroup.visible = railOutlineCheckbox.checked;
+    commit();
   });
 
   const additionalPostsPerSectionInput = methodOptionsEl.querySelector<HTMLInputElement>("#additional-posts-per-section")!;
@@ -584,6 +657,7 @@ function renderMethodControls(type: ObstacleType, method: ConstructionMethod): v
     renderBom(type, method);
     rebuildPartDrawings(type, method);
   });
+  additionalPostsPerSectionInput.addEventListener("change", commit);
 
   for (const icon of methodOptionsEl.querySelectorAll<HTMLElement>(".info-icon")) {
     // Safari doesn't focus a button on click by default; force it so the delegated
@@ -595,10 +669,12 @@ function renderMethodControls(type: ObstacleType, method: ConstructionMethod): v
     const wireframeCheckbox = methodOptionsEl.querySelector<HTMLInputElement>(`#wireframe-${id}`)!;
     wireframeCheckbox.addEventListener("change", () => {
       material.wireframe = wireframeCheckbox.checked;
+      commit();
     });
     const showCheckbox = methodOptionsEl.querySelector<HTMLInputElement>(`#show-${id}`)!;
     showCheckbox.addEventListener("change", () => {
       group.visible = showCheckbox.checked;
+      commit();
     });
   }
 }
@@ -651,6 +727,7 @@ function renderSliders(type: ObstacleType): void {
       rebuildPartDrawings(type, currentMethod);
       renderRideabilityWarning(type);
     });
+    input.addEventListener("change", commit);
 
     row.append(label, input);
     slidersEl.append(row);
@@ -682,15 +759,111 @@ function resetParams(): void {
   renderRideabilityWarning(type);
 }
 
-typeSelect.addEventListener("change", () => selectType(typeSelect.value as ObstacleType));
+// --- Undo/redo + persistence ---
+
+function saveState(state: AppState): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+/** Reads every live control value into one AppState — the counterpart to applyState below. */
+function snapshot(): AppState {
+  return {
+    type: typeSelect.value as ObstacleType,
+    method: currentMethod,
+    params: { ...currentParams },
+    centerRail: currentCenterRail,
+    additionalPostsPerSection: currentAdditionalPostsPerSection,
+    railOutline: railOutlinesGroup.visible,
+    wireframe: Object.fromEntries(COMPONENT_TOGGLES.map(({ id, material }) => [id, material.wireframe])),
+    show: Object.fromEntries(COMPONENT_TOGGLES.map(({ id, group }) => [id, group.visible])),
+  };
+}
+
+function updateHistoryButtons(): void {
+  undoBtn.disabled = historyState.past.length === 0;
+  redoBtn.disabled = historyState.future.length === 0;
+}
+
+/** Folds the current live values into history as one undo step, and persists them. Call after
+ * a control change completes (slider release, select/checkbox change, reset). */
+function commit(): void {
+  historyState = pushHistory(historyState, snapshot());
+  saveState(historyState.present);
+  updateHistoryButtons();
+}
+
+/** Syncs the live variables + every toggle-carrying material/group + the whole DOM to a
+ * historical (or persisted, or default) state, then fully re-renders. Used by boot, undo, and
+ * redo. Toggles are applied to their materials/groups *before* renderMethodControls runs, so
+ * its checkboxes' `checked` attributes (which read those objects directly) reflect the
+ * restored state rather than whatever was live before. */
+function applyState(state: AppState): void {
+  currentParams = { ...state.params };
+  currentCenterRail = state.centerRail;
+  currentAdditionalPostsPerSection = state.additionalPostsPerSection;
+
+  typeSelect.value = state.type;
+  renderMethodOptions(state.type); // resets currentMethod to that type's first implemented method
+  if (IMPLEMENTED_METHODS[state.type].includes(state.method)) {
+    currentMethod = state.method;
+    methodSelect.value = state.method;
+  }
+
+  railOutlinesGroup.visible = state.railOutline;
+  for (const { id, material, group } of COMPONENT_TOGGLES) {
+    material.wireframe = state.wireframe[id] ?? false;
+    group.visible = state.show[id] ?? true;
+  }
+
+  renderSliders(state.type);
+  renderMethodControls(state.type, currentMethod);
+  rebuildObstacle(state.type);
+  rebuildStructure(state.type, currentMethod);
+  rebuildDimensions(state.type);
+  renderBom(state.type, currentMethod);
+  rebuildPartDrawings(state.type, currentMethod);
+  renderRideabilityWarning(state.type);
+  updateHistoryButtons();
+}
+
+function undo(): void {
+  historyState = undoHistory(historyState);
+  applyState(historyState.present);
+  saveState(historyState.present);
+}
+
+function redo(): void {
+  historyState = redoHistory(historyState);
+  applyState(historyState.present);
+  saveState(historyState.present);
+}
+
+window.addEventListener("keydown", (event) => {
+  if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "z") return;
+  event.preventDefault();
+  if (event.shiftKey) redo();
+  else undo();
+});
+
+undoBtn.addEventListener("click", undo);
+redoBtn.addEventListener("click", redo);
+
+typeSelect.addEventListener("change", () => {
+  selectType(typeSelect.value as ObstacleType);
+  commit();
+});
 methodSelect.addEventListener("change", () => {
   currentMethod = methodSelect.value as ConstructionMethod;
   renderMethodControls(typeSelect.value as ObstacleType, currentMethod);
   rebuildStructure(typeSelect.value as ObstacleType, currentMethod);
   renderBom(typeSelect.value as ObstacleType, currentMethod);
   rebuildPartDrawings(typeSelect.value as ObstacleType, currentMethod);
+  commit();
 });
-resetBtn.addEventListener("click", resetParams);
+resetBtn.addEventListener("click", () => {
+  resetParams();
+  commit();
+});
 
 const tabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".tab-btn"));
 for (const tabButton of tabButtons) {
@@ -703,7 +876,7 @@ for (const tabButton of tabButtons) {
   });
 }
 
-selectType("roller");
+applyState(historyState.present);
 
 function resize(): void {
   const { clientWidth, clientHeight } = viewport;

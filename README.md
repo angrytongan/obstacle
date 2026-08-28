@@ -5,10 +5,12 @@ type (roller, berm, kicker), tweak its parameters, choose a construction
 method, and see the 3D shape alongside CAD-style dimension lines, a 2D
 per-part drawings tab, and a bill-of-materials tab.
 
-Standalone: no terrain, no trail, no persistence — just one obstacle at a
-time. Currently only the roller's earthen and timber-framed construction
-methods are implemented — see [docs/status.md](docs/status.md) for what's
-built and [docs/features.md](docs/features.md) for the other type/method
+Standalone: no terrain, no trail, no saved projects — just one obstacle at
+a time (though every change is undoable, and the last state survives a
+reload via localStorage). Currently only the roller's earthen and
+timber-framed construction methods are implemented — see
+[docs/status.md](docs/status.md) for what's built and
+[docs/features.md](docs/features.md) for the other type/method
 combinations still to come.
 
 ## Running

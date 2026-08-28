@@ -1,5 +1,5 @@
 import type { RollerParams } from "../obstacles/roller";
-import { buildRollerTimberFrame, groupPostsByLength, type PostGroup } from "./rollerTimberFrame";
+import { buildRollerTimberFrame, groupMembersByLength, type LengthGroup } from "./rollerTimberFrame";
 import { TIMBER_STOCK } from "./timberStock";
 
 export interface TimberBom {
@@ -9,9 +9,13 @@ export interface TimberBom {
   /** Total curved (arc) length across all rails, in meters. */
   railLinearMetersM: number;
   /** Every post, grouped by its total length (above-ground + embedment) — posts vary by
-   * height, so unlike rails/decking this is listed exactly, not averaged into one row. */
-  postGroups: PostGroup[];
+   * height, so unlike rail sections this is listed exactly, not averaged into one row. */
+  postGroups: LengthGroup[];
   deckingBoardCount: number;
+  /** Every decking board, grouped by its span across the roller's width — one group when the
+   * width doesn't taper, more (often one-each) when it does, same exact-listing treatment as
+   * postGroups. */
+  deckingBoardGroups: LengthGroup[];
   /** 150x28mm decking board stock, with a waste factor for offcuts/trimming. */
   deckingBoardLinearMetersM: number;
 }
@@ -36,8 +40,9 @@ export function calculateRollerTimberBom(
     railCount,
     railSectionCount: frame.sectionsPerRail * railCount,
     railLinearMetersM: frame.railArcLengthM * railCount,
-    postGroups: groupPostsByLength(frame.posts),
+    postGroups: groupMembersByLength(frame.posts, 1),
     deckingBoardCount: frame.deckingBoards.length,
+    deckingBoardGroups: groupMembersByLength(frame.deckingBoards, 2),
     deckingBoardLinearMetersM,
   };
 }

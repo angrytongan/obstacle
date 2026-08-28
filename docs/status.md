@@ -31,6 +31,58 @@ A "Reset to defaults" button (`#reset-btn`) below the sliders calls
 obstacle type, but keeps the current construction method selection rather
 than also re-running `renderMethodOptions`.
 
+## Undo/redo + persistence
+
+`src/history.ts` (ported from `../kicker`, see decisions.md) — a generic,
+immutable `History<T> = { past, present, future }` with
+`createHistory`/`pushHistory`/`undoHistory`/`redoHistory`, tested in
+`history.test.ts`.
+
+`src/main.ts`'s `AppState` is everything the sliders/selects/checkboxes
+control — `type`, `method`, `params`, `centerRail`,
+`additionalPostsPerSection`, `railOutline`, and `wireframe`/`show`
+(`Record<string, boolean>` keyed by `COMPONENT_TOGGLES` id, since those two
+toggle groups live directly on Three.js materials/groups rather than their
+own `let`s). `historyState: History<AppState>` starts from
+`loadInitialState()` — `localStorage.getItem("obstacle-app-state")`,
+`JSON.parse`d and merged field-by-field over `DEFAULT_APP_STATE` in a
+try/catch (a corrupted blob, or one missing a since-added field, falls
+back per-field rather than crashing), or `DEFAULT_APP_STATE` outright if
+nothing's saved yet.
+
+`currentParams`/`currentMethod`/`currentCenterRail`/
+`currentAdditionalPostsPerSection` are a live/draft view seeded from
+`historyState.present` — mutated directly on every slider `input` tick for
+instant preview, same as before this feature. `commit()` folds the live
+values (via `snapshot()`, which also reads `railOutlinesGroup.visible` and
+each `COMPONENT_TOGGLES` entry's `material.wireframe`/`group.visible` off
+the Three.js objects directly) into `historyState` and
+`localStorage.setItem`s it — called after every discrete change completes:
+a slider's `change` event (fires once on drag release, not per-tick, so a
+whole drag is one undo step), `type-select`/`method-select` `change`,
+`reset-btn` click, and every timber-method checkbox's `change` (centre
+rail, rail outline, per-component wireframe/show).
+
+`undo()`/`redo()` call `undoHistory`/`redoHistory` then `applyState()` —
+the restore path also used at boot (`applyState(historyState.present)`
+replaces the old unconditional `selectType("roller")`) — which sets the
+live variables and every toggle-carrying material/group *before*
+re-rendering controls (so restored checkboxes show correctly), restores
+`type`/`method` (`renderMethodOptions` normally resets to the type's first
+implemented method, so `applyState` overrides back to the historical
+method if it's still implemented for that type), then re-runs the full
+existing rebuild chain. `#undo-btn`/`#redo-btn` (`.history-buttons` in
+`#panel`, disabled when their side of history is empty) and a ported
+`Cmd/Ctrl+Z` / `Cmd/Ctrl+Shift+Z` keyboard shortcut both call `undo()`/
+`redo()` directly.
+
+Switching obstacle type or construction method is itself one undo step —
+unlike `../half-pipe`/`../kicker`, which only ever have one shape, so this
+didn't arise there. "Reset to defaults" and switching obstacle type still
+only reset `params`, not centre-rail/wireframe/show/outline (unchanged
+from before this feature) — but the reset/switch itself is now a committed
+history step like any other change.
+
 ## Scene
 
 `src/main.ts`: `PerspectiveCamera` + `OrbitControls` (no damping — rotate/
@@ -132,12 +184,13 @@ check for earthen, rail/section counts for timber) above the table.
   deckingBoardThicknessM`), which means it's `railSizeM.depth +
   deckingBoardThicknessM` above the nominal `height` everywhere, not
   matching it exactly the way earthen's mound does — the structure's own
-  thickness has to go somewhere above the ground. `groupPostsByLength`
-  groups posts by their (rounded) total length, longest first — genuinely
-  only a handful of distinct lengths occur (the height profile repeats
-  every period, and every rail's posts at the same x share it), shared by
-  the BOM calculator and the 2D drawings so neither groups differently
-  from the other. `buildRailGeometry` builds one rail's curved box-beam
+  thickness has to go somewhere above the ground. `groupMembersByLength`
+  groups posts (or decking boards) by their (rounded) length along a given
+  axis, longest first — posts genuinely only have a handful of distinct
+  lengths (the height profile repeats every period, and every rail's posts
+  at the same x share it); shared by the BOM calculator and the 2D
+  drawings so neither groups differently from the other. `buildRailGeometry`
+  builds one rail's curved box-beam
   `BufferGeometry` at a given fixed Z offset — four ruled strips (top/
   bottom/left/right) plus a flat triangulated cap at each end closing the
   tube, so the rail doesn't read as a hollow shell viewed end-on.
@@ -151,11 +204,18 @@ check for earthen, rail/section counts for timber) above the table.
   rail/post/decking design.
 - `rollerTimberBom.ts` — `calculateRollerTimberBom(params, centerRail,
   additionalPostsPerSection)`: rail count/section count/curved length,
-  `postGroups` (every distinct post length and how many posts share it —
-  not averaged, unlike rails/decking, since the parts list should list
-  every post) and decking board count/linear meters (each board's span
-  across the width, summed, with a waste factor) from the frame layout
-  above.
+  `postGroups` and `deckingBoardGroups` (every distinct post length, and
+  every distinct decking board span across the width, each with how many
+  members share it — not averaged, unlike rail sections, since the parts
+  list should list every one), plus decking board count/linear meters
+  (summed, with a waste factor) from the frame layout above. Both
+  `postGroups`/`deckingBoardGroups` come from the same
+  `groupMembersByLength(members, axis)` in `rollerTimberFrame.ts` (axis 1
+  for posts' height, axis 2 for decking boards' width-spanning length) —
+  a decking board's span is continuous under a width taper, so a tapered
+  roller's boards mostly end up one group each (rounded to the nearest mm),
+  while an untapered one collapses to a single group since every board
+  shares the same span.
 - Wired into the "Bill of materials" tab (same table + info-icon +
   disclaimer structure as earthen — see below) and into the 3D view:
   `rebuildStructure` hides the solid mound mesh and renders the posts and
@@ -221,19 +281,20 @@ part shape, not half-pipe-specific:
     the rail's own depth, matching how `buildRailGeometry` represents the
     rail (constant vertical thickness, not curve-normal).
   - `postPartDrawings` — one `rectanglePartDrawing` per distinct post
-    length (`groupPostsByLength`, shared with the BOM), titled
+    length (`groupMembersByLength(posts, 1)`, shared with the BOM), titled
     `"Post — {count}x"` and noting the embedded portion in its labels —
-    posts are listed exactly, not averaged, unlike rails/decking below.
-  - `deckingBoardPartDrawing` — a `rectanglePartDrawing` at the part's
-    *average* size (decking boards vary in length under a width taper),
-    via the shared `averageMemberLength(members, axis)` helper — also
-    reused by the "Bill of materials" tab's dimensions column, so the
-    drawing and the table can't show different numbers for the same
-    thing. The average comes from `buildRollerTimberFrame`'s raw array,
-    not the BOM's waste-adjusted total (that overstates the true average).
+    posts are listed exactly, not averaged, unlike rail sections above.
+  - `deckingBoardPartDrawings` — same treatment as posts: one
+    `rectanglePartDrawing` per distinct board span
+    (`groupMembersByLength(deckingBoards, 2)`, shared with the BOM), titled
+    `"Decking board — {count}x"`. One drawing when the roller's width
+    doesn't taper (every board shares the same span); more (often one
+    each) when it does — replaced an earlier single-drawing-at-the-average
+    design once tapered decking needed every distinct span called out, not
+    just one representative number (see decisions.md).
   - `allRollerTimberPartDrawings(params, centerRail, additionalPostsPerSection)` —
-    rail section, then one drawing per post-length group, then decking
-    board, in that order.
+    rail section, then one drawing per post-length group, then one
+    drawing per decking-board-span group, in that order.
 - `rebuildPartDrawings` in `src/main.ts` rebuilds `#drawings-list` (one
   `.drawing-card` per part: an `<h3>` title plus the rendered `<svg>`) on
   every parameter/method/centre-rail/posts-per-section change, same

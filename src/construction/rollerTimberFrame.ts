@@ -191,22 +191,25 @@ export function buildRollerTimberFrame(
   return { railZOffsets, posts, deckingBoards, sectionsPerRail: boundaries.length - 1, railArcLengthM };
 }
 
-export interface PostGroup {
-  /** Total post length in meters, above-ground portion plus postEmbedmentDepthM. */
+export interface LengthGroup {
+  /** Total member length in meters — for posts, the above-ground portion plus
+   * postEmbedmentDepthM; for decking boards, the board's span across the roller's width. */
   totalLengthM: number;
   count: number;
 }
 
-/** Groups posts by their (rounded, to absorb float noise) total length, longest first — posts
- * genuinely do come in only a handful of distinct lengths (the roller's height profile repeats
- * every period, and left/right/center rail posts at the same x always match), so listing every
- * post individually would just repeat the same few lengths over and over. Shared by the parts
- * list (rollerTimberBom.ts) and the 2D drawings (rollerTimberPartDrawings.ts) so neither can
- * group differently from the other. */
-export function groupPostsByLength(posts: TimberMember[]): PostGroup[] {
+/** Groups members by their (rounded, to absorb float noise) length along the given `size` axis
+ * (1 for posts' height, 2 for decking boards' width-spanning length), longest first — shared by
+ * the parts list (rollerTimberBom.ts) and the 2D drawings (rollerTimberPartDrawings.ts) so
+ * neither can group differently from the other. Posts genuinely do come in only a handful of
+ * distinct lengths (the roller's height profile repeats every period, and left/right/center
+ * rail posts at the same x always match); decking boards are one group when the roller's width
+ * doesn't taper (every board the same span) and split into more, often one-each, under a taper
+ * (see decisions.md for why this is grouped-exact rather than averaged, like rail sections). */
+export function groupMembersByLength(members: TimberMember[], axis: 0 | 1 | 2): LengthGroup[] {
   const countByLengthMm = new Map<number, number>();
-  for (const post of posts) {
-    const lengthMm = Math.round(post.size[1] * 1000);
+  for (const member of members) {
+    const lengthMm = Math.round(member.size[axis] * 1000);
     countByLengthMm.set(lengthMm, (countByLengthMm.get(lengthMm) ?? 0) + 1);
   }
   return [...countByLengthMm.entries()]

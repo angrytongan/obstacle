@@ -11,7 +11,7 @@ export interface RollerParams {
 
 export const ROLLER_DEFAULTS: RollerParams = {
   length: 3,
-  height: 0.4,
+  height: 0.3,
   widthStart: 1,
   widthEnd: 1,
   periods: 1,

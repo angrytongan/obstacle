@@ -6,12 +6,12 @@ describe("buildRollerDimensions", () => {
   it("returns one dimension each for length, width-start, width-end, and height, labeled to one decimal", () => {
     const dims = buildRollerDimensions(ROLLER_DEFAULTS);
     expect(dims).toHaveLength(4);
-    expect(dims.map((d) => d.text)).toEqual(["3.0 m", "1.0 m", "1.0 m", "0.4 m"]);
+    expect(dims.map((d) => d.text)).toEqual(["3.0 m", "1.0 m", "1.0 m", "0.3 m"]);
   });
 
   it("labels the width-start and width-end dimensions independently for a tapered roller", () => {
     const dims = buildRollerDimensions({ ...ROLLER_DEFAULTS, widthStart: 0.5, widthEnd: 2.5 });
-    expect(dims.map((d) => d.text)).toEqual(["3.0 m", "0.5 m", "2.5 m", "0.4 m"]);
+    expect(dims.map((d) => d.text)).toEqual(["3.0 m", "0.5 m", "2.5 m", "0.3 m"]);
   });
 
   it("anchors the height dimension at the midpoint for a single-period roller", () => {
