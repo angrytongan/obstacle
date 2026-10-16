@@ -2,8 +2,9 @@
 
 Browser app for planning real-world mountain bike obstacle builds: pick a
 type, adjust its parameters via sliders, choose a construction method, and
-see the 3D shape plus a live bill of materials and soundness check.
-Standalone — no terrain, no trail, no persistence (deliberate: see
+see the 3D shape plus a live bill of materials and soundness check. Every
+change is undoable and the last state survives a reload (localStorage).
+Standalone — no terrain, no trail, no saved *projects* (deliberate: see
 [docs/decisions.md](docs/decisions.md)).
 
 ## Decisions

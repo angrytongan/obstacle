@@ -2,12 +2,14 @@
 
 Browser app for planning real-world mountain bike obstacle builds: pick a
 type (roller, berm, kicker), tweak its parameters, choose a construction
-method, and see a live bill of materials and CAD-style dimension lines
-alongside the 3D shape.
+method, and see the 3D shape alongside CAD-style dimension lines, a 2D
+per-part drawings tab, and a bill-of-materials tab.
 
-Standalone: no terrain, no trail, no persistence — just one obstacle at a
-time. Currently only the roller's earthen construction method is
-implemented — see [docs/status.md](docs/status.md) for what's built and
+Standalone: no terrain, no trail, no saved projects — just one obstacle at
+a time (though every change is undoable, and the last state survives a
+reload via localStorage). Currently only the roller's earthen and
+timber-framed construction methods are implemented — see
+[docs/status.md](docs/status.md) for what's built and
 [docs/features.md](docs/features.md) for the other type/method
 combinations still to come.
 
@@ -33,7 +35,10 @@ Vite + TypeScript + Three.js, no framework, no backend. `src/obstacles/`
 holds pure geometry builders (one file per obstacle type, each a parametric
 `THREE.BufferGeometry` centered on its own footprint); `src/construction/`
 holds construction-method reference data and per-method bill-of-materials /
-soundness-check calculations; `src/dimensions/` holds CAD-style dimension
-line builders; `src/main.ts` wires up the scene, camera, lighting, and the
+soundness-check calculations; `src/dimensions/` holds CAD-style 3D
+dimension line builders; `src/drawings/` holds the 2D per-part shop
+drawing engine (ported from the sibling `../half-pipe` app, which shares
+this pattern with `../kicker`); `src/main.ts` wires up the scene, camera,
+lighting, the tabbed 3D-view/2D-drawings/bill-of-materials layout, and the
 type/method/parameter UI. `research/` holds source notes for the
 real-world dimensions/ratios/standards the calculations are based on.
